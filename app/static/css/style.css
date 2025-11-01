@@ -382,6 +382,14 @@ main {
     margin-right: 8px;
 }
 
+.setting-description {
+    font-size: 0.85rem;
+    color: #888;
+    margin-top: 5px;
+    margin-left: 28px;
+    line-height: 1.4;
+}
+
 .setting-input {
     width: 100%;
     padding: 10px 15px;
