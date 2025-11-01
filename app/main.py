@@ -13,11 +13,9 @@ app = Flask(__name__)
 UPLOAD_FOLDER = '/tmp/uploads'
 OUTPUT_FOLDER = '/tmp/outputs'
 ALLOWED_EXTENSIONS = {'mbox', 'mbx'}
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 
 # Create necessary directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)

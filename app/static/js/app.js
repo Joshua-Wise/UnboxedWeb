@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const pageSizeSelect = document.getElementById('pageSize');
     const separatePDFsCheckbox = document.getElementById('separatePDFs');
     const includeAttachmentsCheckbox = document.getElementById('includeAttachments');
-    const maxFileSizeInput = document.getElementById('maxFileSize');
     const darkModeCheckbox = document.getElementById('darkMode');
 
     let currentFilename = '';
@@ -64,16 +63,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Validate file type
         const validExtensions = ['mbox', 'mbx'];
         const fileExtension = file.name.split('.').pop().toLowerCase();
-        
+
         if (!validExtensions.includes(fileExtension)) {
             showError('Invalid file type. Please upload an MBOX file (.mbox or .mbx)');
-            return;
-        }
-
-        // Validate file size (50MB)
-        const maxSize = 50 * 1024 * 1024;
-        if (file.size > maxSize) {
-            showError('File is too large. Maximum size is 50MB');
             return;
         }
 
@@ -180,9 +172,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (settings.includeAttachments !== undefined) {
             includeAttachmentsCheckbox.checked = settings.includeAttachments;
         }
-        if (settings.maxFileSize) {
-            maxFileSizeInput.value = settings.maxFileSize;
-        }
         if (settings.darkMode !== undefined) {
             darkModeCheckbox.checked = settings.darkMode;
         }
@@ -194,7 +183,6 @@ document.addEventListener('DOMContentLoaded', function() {
             pageSize: 'A4',
             separatePDFs: false,
             includeAttachments: true,
-            maxFileSize: 50,
             darkMode: false
         };
     }
@@ -204,7 +192,6 @@ document.addEventListener('DOMContentLoaded', function() {
             pageSize: pageSizeSelect.value,
             separatePDFs: separatePDFsCheckbox.checked,
             includeAttachments: includeAttachmentsCheckbox.checked,
-            maxFileSize: parseInt(maxFileSizeInput.value),
             darkMode: darkModeCheckbox.checked
         };
 
