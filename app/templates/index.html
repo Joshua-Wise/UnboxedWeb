@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBOX to PDF Converter</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>MBOX to PDF Converter</h1>
+            <p class="subtitle">Convert MBOX email archives into PDF documents</p>
+        </header>
+
+        <main>
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-box" id="uploadBox">
+                    <div class="upload-icon">📁</div>
+                    <h2>Drop your MBOX file here</h2>
+                    <p>or click to browse</p>
+                    <input type="file" id="fileInput" accept=".mbox,.mbx" hidden>
+                    <p class="file-info">Supported formats: .mbox, .mbx (Max 50MB)</p>
+                </div>
+            </div>
+
+            <div class="processing-section" id="processingSection" style="display: none;">
+                <div class="spinner"></div>
+                <p class="processing-text">Processing your MBOX file...</p>
+                <p class="processing-subtext">This may take a few moments</p>
+            </div>
+
+            <div class="result-section" id="resultSection" style="display: none;">
+                <div class="success-icon">✅</div>
+                <h2>Conversion Complete!</h2>
+                <p class="result-info" id="resultInfo"></p>
+                <button class="download-btn" id="downloadBtn">
+                    <span class="btn-icon">⬇️</span> Download PDF
+                </button>
+                <button class="new-conversion-btn" id="newConversionBtn">
+                    Convert Another File
+                </button>
+            </div>
+
+            <div class="error-section" id="errorSection" style="display: none;">
+                <div class="error-icon">❌</div>
+                <h2>Conversion Failed</h2>
+                <p class="error-message" id="errorMessage"></p>
+                <button class="retry-btn" id="retryBtn">
+                    Try Again
+                </button>
+            </div>
+        </main>
+
+        <footer>
+            <p>MBOX to PDF Converter</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

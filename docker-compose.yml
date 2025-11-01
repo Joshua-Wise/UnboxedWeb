@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  mbox-converter:
+    build: .
+    container_name: mbox-to-pdf-converter
+    ports:
+      - "8080:5000"
+    volumes:
+      # Optional: persist uploads and outputs if needed
+      - ./uploads:/tmp/uploads
+      - ./outputs:/tmp/outputs
+    environment:
+      - FLASK_APP=app.main
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
