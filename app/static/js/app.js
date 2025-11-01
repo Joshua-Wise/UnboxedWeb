@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
     const saveSettingsBtn = document.getElementById('saveSettingsBtn');
     const pageSizeSelect = document.getElementById('pageSize');
+    const separatePDFsCheckbox = document.getElementById('separatePDFs');
     const includeAttachmentsCheckbox = document.getElementById('includeAttachments');
     const maxFileSizeInput = document.getElementById('maxFileSize');
     const darkModeCheckbox = document.getElementById('darkMode');
@@ -87,6 +88,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData();
         formData.append('file', file);
 
+        // Get current settings and send with upload
+        const settings = getSettings();
+        formData.append('settings', JSON.stringify(settings));
+
         fetch('/upload', {
             method: 'POST',
             body: formData
@@ -97,7 +102,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 showError(data.error);
             } else {
                 currentFilename = data.filename;
-                showResult(data.email_count);
+                const separateMsg = data.separate_pdfs ? ' (as separate PDFs)' : '';
+                showResult(data.email_count, separateMsg);
             }
         })
         .catch(error => {
@@ -114,13 +120,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Show result
-    function showResult(emailCount) {
+    function showResult(emailCount, extraMessage = '') {
         uploadSection.style.display = 'none';
         processingSection.style.display = 'none';
         resultSection.style.display = 'block';
         errorSection.style.display = 'none';
 
-        resultInfo.textContent = `Successfully converted ${emailCount} email${emailCount !== 1 ? 's' : ''} to PDF`;
+        resultInfo.textContent = `Successfully converted ${emailCount} email${emailCount !== 1 ? 's' : ''} to PDF${extraMessage}`;
     }
 
     // Show error
@@ -168,6 +174,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (settings.pageSize) {
             pageSizeSelect.value = settings.pageSize;
         }
+        if (settings.separatePDFs !== undefined) {
+            separatePDFsCheckbox.checked = settings.separatePDFs;
+        }
         if (settings.includeAttachments !== undefined) {
             includeAttachmentsCheckbox.checked = settings.includeAttachments;
         }
@@ -183,6 +192,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const savedSettings = localStorage.getItem('mboxConverterSettings');
         return savedSettings ? JSON.parse(savedSettings) : {
             pageSize: 'A4',
+            separatePDFs: false,
             includeAttachments: true,
             maxFileSize: 50,
             darkMode: false
@@ -192,6 +202,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function saveSettings() {
         const settings = {
             pageSize: pageSizeSelect.value,
+            separatePDFs: separatePDFsCheckbox.checked,
             includeAttachments: includeAttachmentsCheckbox.checked,
             maxFileSize: parseInt(maxFileSizeInput.value),
             darkMode: darkModeCheckbox.checked

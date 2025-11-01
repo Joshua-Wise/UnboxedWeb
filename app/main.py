@@ -1,8 +1,11 @@
 import os
+import json
+import zipfile
+import shutil
 from flask import Flask, request, render_template, send_file, jsonify
 from werkzeug.utils import secure_filename
 from app.mbox_parser import parse_mbox
-from app.pdf_generator import generate_pdf
+from app.pdf_generator import generate_pdf, generate_separate_pdfs
 
 app = Flask(__name__)
 
@@ -34,41 +37,72 @@ def index():
 def upload_file():
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
-    
+
     file = request.files['file']
-    
+
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
-    
+
     if not allowed_file(file.filename):
         return jsonify({'error': 'Invalid file type. Please upload an MBOX file'}), 400
-    
+
     try:
+        # Get settings from request
+        settings_json = request.form.get('settings', '{}')
+        settings = json.loads(settings_json)
+        separate_pdfs = settings.get('separatePDFs', False)
+
         # Save uploaded file
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
-        
+
         # Parse MBOX file
         emails = parse_mbox(filepath)
-        
+
         if not emails:
             return jsonify({'error': 'No emails found in MBOX file'}), 400
-        
-        # Generate PDF
-        output_filename = f"{os.path.splitext(filename)[0]}.pdf"
-        output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
-        generate_pdf(emails, output_path)
-        
+
+        base_filename = os.path.splitext(filename)[0]
+
+        if separate_pdfs:
+            # Generate separate PDFs for each email
+            temp_pdf_dir = os.path.join(app.config['OUTPUT_FOLDER'], f'{base_filename}_pdfs')
+            os.makedirs(temp_pdf_dir, exist_ok=True)
+
+            pdf_files = generate_separate_pdfs(emails, temp_pdf_dir, base_filename)
+
+            if not pdf_files:
+                return jsonify({'error': 'Failed to generate PDF files'}), 500
+
+            # Create ZIP file
+            output_filename = f"{base_filename}.zip"
+            output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+
+            with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for pdf_file in pdf_files:
+                    pdf_path = os.path.join(temp_pdf_dir, pdf_file)
+                    zipf.write(pdf_path, pdf_file)
+
+            # Clean up temporary PDF directory
+            shutil.rmtree(temp_pdf_dir)
+
+        else:
+            # Generate single PDF with all emails
+            output_filename = f"{base_filename}.pdf"
+            output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+            generate_pdf(emails, output_path)
+
         # Clean up uploaded file
         os.remove(filepath)
-        
+
         return jsonify({
             'success': True,
             'filename': output_filename,
-            'email_count': len(emails)
+            'email_count': len(emails),
+            'separate_pdfs': separate_pdfs
         })
-    
+
     except Exception as e:
         return jsonify({'error': f'Error processing file: {str(e)}'}), 500
 
