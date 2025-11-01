@@ -11,7 +11,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultInfo = document.getElementById('resultInfo');
     const errorMessage = document.getElementById('errorMessage');
 
+    // Settings panel elements
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsOverlay = document.getElementById('settingsOverlay');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    const pageSizeSelect = document.getElementById('pageSize');
+    const includeAttachmentsCheckbox = document.getElementById('includeAttachments');
+    const maxFileSizeInput = document.getElementById('maxFileSize');
+    const darkModeCheckbox = document.getElementById('darkMode');
+
     let currentFilename = '';
+
+    // Initialize settings from localStorage
+    initializeSettings();
 
     // Click to upload
     uploadBox.addEventListener('click', () => {
@@ -146,4 +159,85 @@ document.addEventListener('DOMContentLoaded', function() {
         fileInput.value = '';
         currentFilename = '';
     }
+
+    // Settings Panel Functions
+    function initializeSettings() {
+        // Load settings from localStorage
+        const settings = getSettings();
+
+        if (settings.pageSize) {
+            pageSizeSelect.value = settings.pageSize;
+        }
+        if (settings.includeAttachments !== undefined) {
+            includeAttachmentsCheckbox.checked = settings.includeAttachments;
+        }
+        if (settings.maxFileSize) {
+            maxFileSizeInput.value = settings.maxFileSize;
+        }
+        if (settings.darkMode !== undefined) {
+            darkModeCheckbox.checked = settings.darkMode;
+        }
+    }
+
+    function getSettings() {
+        const savedSettings = localStorage.getItem('mboxConverterSettings');
+        return savedSettings ? JSON.parse(savedSettings) : {
+            pageSize: 'A4',
+            includeAttachments: true,
+            maxFileSize: 50,
+            darkMode: false
+        };
+    }
+
+    function saveSettings() {
+        const settings = {
+            pageSize: pageSizeSelect.value,
+            includeAttachments: includeAttachmentsCheckbox.checked,
+            maxFileSize: parseInt(maxFileSizeInput.value),
+            darkMode: darkModeCheckbox.checked
+        };
+
+        localStorage.setItem('mboxConverterSettings', JSON.stringify(settings));
+        return settings;
+    }
+
+    // Open settings panel
+    settingsBtn.addEventListener('click', function() {
+        settingsOverlay.classList.add('active');
+    });
+
+    // Close settings panel
+    closeSettingsBtn.addEventListener('click', function() {
+        settingsOverlay.classList.remove('active');
+    });
+
+    // Close settings when clicking outside the panel
+    settingsOverlay.addEventListener('click', function(e) {
+        if (e.target === settingsOverlay) {
+            settingsOverlay.classList.remove('active');
+        }
+    });
+
+    // Save settings button
+    saveSettingsBtn.addEventListener('click', function() {
+        const settings = saveSettings();
+
+        // Show a brief confirmation (you can enhance this with a toast notification)
+        const originalText = saveSettingsBtn.textContent;
+        saveSettingsBtn.textContent = 'Settings Saved!';
+        saveSettingsBtn.style.background = '#10b981';
+
+        setTimeout(function() {
+            saveSettingsBtn.textContent = originalText;
+            saveSettingsBtn.style.background = '';
+            settingsOverlay.classList.remove('active');
+        }, 1000);
+    });
+
+    // Close settings panel with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && settingsOverlay.classList.contains('active')) {
+            settingsOverlay.classList.remove('active');
+        }
+    });
 });
