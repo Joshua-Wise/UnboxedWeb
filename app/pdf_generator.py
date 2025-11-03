@@ -304,8 +304,85 @@ def generate_single_email_pdf(email, output_path):
     doc.build(story)
 
 
-def generate_separate_pdfs(emails, output_dir, base_filename):
+def build_custom_filename(email, idx, naming_config):
+    """Build custom filename based on naming configuration with order support"""
+    # Start with 6-digit index (always included)
+    parts = [f"{idx+1:06d}"]
+
+    # Get naming items (supports both old and new format)
+    items = naming_config.get('items', [])
+
+    # Fallback to old format if items not present
+    if not items:
+        # Convert old format to new format for backward compatibility
+        items = []
+        if naming_config.get('includeSubject', True):
+            items.append({'id': 'subject', 'enabled': True})
+        if naming_config.get('includeDate', False):
+            items.append({'id': 'date', 'enabled': True})
+        if naming_config.get('includeSender', False):
+            items.append({'id': 'sender', 'enabled': True})
+
+    # Process items in order
+    for item in items:
+        if not item.get('enabled', False):
+            continue
+
+        item_id = item.get('id', '')
+
+        if item_id == 'subject':
+            subject = email.get('subject', 'No Subject')
+            safe_subject = sanitize_filename(subject, max_length=50)
+            parts.append(safe_subject)
+
+        elif item_id == 'date':
+            date_str = email.get('date', '')
+            if date_str:
+                # Try to extract just the date part (YYYY-MM-DD)
+                try:
+                    # If it's already formatted as YYYY-MM-DD HH:MM:SS, just take the date part
+                    if ' ' in date_str:
+                        date_part = date_str.split(' ')[0]
+                    else:
+                        date_part = date_str[:10]  # First 10 chars should be the date
+                    safe_date = sanitize_filename(date_part, max_length=20)
+                    parts.append(safe_date)
+                except:
+                    # Fallback: sanitize the entire date string
+                    safe_date = sanitize_filename(date_str, max_length=20)
+                    parts.append(safe_date)
+
+        elif item_id == 'sender':
+            sender = email.get('from', '')
+            if sender:
+                # Extract email address or name from "Name <email@example.com>" format
+                # If it contains <, extract the part before it; otherwise use as-is
+                if '<' in sender:
+                    sender_part = sender.split('<')[0].strip()
+                    if not sender_part:  # If name is empty, use email
+                        sender_part = sender.split('<')[1].split('>')[0].strip()
+                else:
+                    sender_part = sender
+                safe_sender = sanitize_filename(sender_part, max_length=30)
+                parts.append(safe_sender)
+
+    # Join all parts with underscores
+    filename = '_'.join(parts) + '.pdf'
+    return filename
+
+
+def generate_separate_pdfs(emails, output_dir, base_filename, naming_config=None):
     """Generate separate PDF files for each email and return list of filenames"""
+
+    # Default naming config if not provided
+    if naming_config is None:
+        naming_config = {
+            'items': [
+                {'id': 'subject', 'enabled': True},
+                {'id': 'date', 'enabled': False},
+                {'id': 'sender', 'enabled': False}
+            ]
+        }
 
     pdf_files = []
 
@@ -313,12 +390,8 @@ def generate_separate_pdfs(emails, output_dir, base_filename):
     os.makedirs(output_dir, exist_ok=True)
 
     for idx, email in enumerate(emails):
-        # Create filename based on email subject
-        subject = email.get('subject', 'No Subject')
-        safe_subject = sanitize_filename(subject)
-
-        # Create unique filename with index to avoid duplicates
-        filename = f"{idx+1:03d}_{safe_subject}.pdf"
+        # Create filename based on naming configuration
+        filename = build_custom_filename(email, idx, naming_config)
         output_path = os.path.join(output_dir, filename)
 
         try:

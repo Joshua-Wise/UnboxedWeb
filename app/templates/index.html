@@ -24,16 +24,21 @@
             <div class="upload-section" id="uploadSection">
                 <div class="upload-box" id="uploadBox">
                     <div class="upload-icon">📁</div>
-                    <h2>Drop your MBOX file here</h2>
+                    <h2>Drop your MBOX files here</h2>
                     <p>or click to browse</p>
-                    <input type="file" id="fileInput" accept=".mbox,.mbx" hidden>
-                    <p class="file-info">Supported formats: .mbox, .mbx</p>
+                    <input type="file" id="fileInput" accept=".mbox,.mbx" multiple hidden>
+                    <p class="file-info">Supported formats: .mbox, .mbx (multiple files supported)</p>
+                </div>
+                <div id="selectedFiles" style="display: none; margin-top: 20px;">
+                    <h3 style="margin-bottom: 10px;">Selected Files:</h3>
+                    <ul id="fileList" style="list-style: none; padding: 0;"></ul>
+                    <button id="processFilesBtn" class="download-btn" style="margin-top: 10px;">Process Files</button>
                 </div>
             </div>
 
             <div class="processing-section" id="processingSection" style="display: none;">
                 <div class="spinner"></div>
-                <p class="processing-text">Processing your MBOX file...</p>
+                <p class="processing-text" id="processingText">Processing your MBOX files...</p>
                 <p class="processing-subtext">This may take a few moments</p>
             </div>
 
@@ -88,6 +93,16 @@
                             Generate Separate PDF per Email
                         </label>
                         <p class="setting-description">Creates individual PDF files for each email and downloads them as a ZIP archive</p>
+                    </div>
+                    <div class="setting-item" id="namingOptions" style="display: none; margin-left: 20px;">
+                        <label style="font-weight: bold;">PDF Filename Format</label>
+                        <p class="setting-description">Customize the order and components of PDF filenames. The 6-digit number is always first.</p>
+                        <div id="namingItemsList" style="margin-top: 10px; border: 1px solid #ddd; border-radius: 4px; padding: 8px; background: #f9f9f9;">
+                            <!-- Naming items will be dynamically populated here -->
+                        </div>
+                        <p class="setting-description" id="namingPreview" style="margin-top: 8px; font-size: 0.85em; color: #666; font-family: monospace;">
+                            Preview: 000001_Subject_2024-01-15_sender@example.com.pdf
+                        </p>
                     </div>
                     <div class="setting-item">
                         <label for="includeAttachments">

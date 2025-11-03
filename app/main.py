@@ -33,42 +33,75 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
+    # Check for multiple files (new format) or single file (backward compatibility)
+    files = request.files.getlist('files')
+    if not files or (len(files) == 1 and files[0].filename == ''):
+        # Try old single file format for backward compatibility
+        if 'file' in request.files:
+            files = [request.files['file']]
+        else:
+            return jsonify({'error': 'No files provided'}), 400
 
-    file = request.files['file']
+    if not files or all(f.filename == '' for f in files):
+        return jsonify({'error': 'No files selected'}), 400
 
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'Invalid file type. Please upload an MBOX file'}), 400
+    # Validate all files
+    for file in files:
+        if not allowed_file(file.filename):
+            return jsonify({'error': f'Invalid file type: {file.filename}. Please upload only MBOX files'}), 400
 
     try:
         # Get settings from request
         settings_json = request.form.get('settings', '{}')
         settings = json.loads(settings_json)
         separate_pdfs = settings.get('separatePDFs', False)
+        naming_config = settings.get('naming', {
+            'items': [
+                {'id': 'subject', 'enabled': True},
+                {'id': 'date', 'enabled': False},
+                {'id': 'sender', 'enabled': False}
+            ]
+        })
 
-        # Save uploaded file
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
+        # Process all MBOX files and collect emails
+        all_emails = []
+        saved_filepaths = []
 
-        # Parse MBOX file
-        emails = parse_mbox(filepath)
+        for file in files:
+            # Save uploaded file
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            saved_filepaths.append(filepath)
+
+            # Parse MBOX file
+            emails = parse_mbox(filepath)
+
+            # Add source file information to each email
+            source_name = os.path.splitext(filename)[0]
+            for email in emails:
+                email['source_file'] = source_name
+
+            all_emails.extend(emails)
+
+        # Use all emails from all files
+        emails = all_emails
 
         if not emails:
-            return jsonify({'error': 'No emails found in MBOX file'}), 400
+            return jsonify({'error': 'No emails found in MBOX files'}), 400
 
-        base_filename = os.path.splitext(filename)[0]
+        # Generate output filename based on number of source files
+        if len(files) == 1:
+            base_filename = os.path.splitext(files[0].filename)[0]
+        else:
+            base_filename = f'combined_{len(files)}_mbox_files'
 
         if separate_pdfs:
             # Generate separate PDFs for each email
             temp_pdf_dir = os.path.join(app.config['OUTPUT_FOLDER'], f'{base_filename}_pdfs')
             os.makedirs(temp_pdf_dir, exist_ok=True)
 
-            pdf_files = generate_separate_pdfs(emails, temp_pdf_dir, base_filename)
+            pdf_files = generate_separate_pdfs(emails, temp_pdf_dir, base_filename, naming_config)
 
             if not pdf_files:
                 return jsonify({'error': 'Failed to generate PDF files'}), 500
@@ -91,8 +124,9 @@ def upload_file():
             output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
             generate_pdf(emails, output_path)
 
-        # Clean up uploaded file
-        os.remove(filepath)
+        # Clean up uploaded files
+        for filepath in saved_filepaths:
+            os.remove(filepath)
 
         return jsonify({
             'success': True,

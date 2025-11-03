@@ -39,3 +39,5 @@ Thumbs.db
 # Application specific
 /tmp/
 *.log
+CLAUDE.md
+/outputs
