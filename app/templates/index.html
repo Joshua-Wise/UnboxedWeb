@@ -77,6 +77,9 @@
             <div class="nav-links">
                 <a href="{{ url_for('index') }}" class="active">Convert Files</a>
                 <a href="{{ url_for('files') }}">My Files</a>
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('admin_panel') }}">Admin Panel</a>
+                {% endif %}
             </div>
             <div class="user-info">
                 {{ current_user.username }} |

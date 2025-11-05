@@ -10,7 +10,7 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from werkzeug.utils import secure_filename
 from app.mbox_parser import parse_mbox
 from app.pdf_generator import generate_pdf, generate_separate_pdfs
-from app.users import User, authenticate_user, init_db, migrate_json_to_sqlite
+from app.users import User, authenticate_user, init_db, migrate_json_to_sqlite, admin_required, get_all_users, create_user, delete_user, update_user_password, toggle_admin_status
 from app.file_manager import register_file, get_user_files, get_file_info, delete_file_record, get_stats_for_user, cleanup_orphaned_files
 
 app = Flask(__name__)
@@ -282,6 +282,134 @@ def download_file(filename):
 
     except Exception as e:
         return jsonify({'error': f'Error downloading file: {str(e)}'}), 500
+
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin_panel():
+    """Admin panel for user management"""
+    return render_template('admin.html')
+
+
+@app.route('/admin/users', methods=['GET'])
+@login_required
+@admin_required
+def get_users():
+    """Get all users (admin only)"""
+    try:
+        users = get_all_users()
+        return jsonify({'success': True, 'users': users})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/users/create', methods=['POST'])
+@login_required
+@admin_required
+def create_new_user():
+    """Create a new user (admin only)"""
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        is_admin = data.get('is_admin', False)
+
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'Username and password are required'}), 400
+
+        if len(username) < 3:
+            return jsonify({'success': False, 'error': 'Username must be at least 3 characters'}), 400
+
+        if len(password) < 6:
+            return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
+
+        success, message = create_user(username, password, is_admin)
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': message}), 400
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/users/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_user_endpoint():
+    """Delete a user (admin only)"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+
+        if not user_id:
+            return jsonify({'success': False, 'error': 'User ID is required'}), 400
+
+        # Prevent deleting yourself
+        if int(user_id) == current_user.id:
+            return jsonify({'success': False, 'error': 'Cannot delete your own account'}), 400
+
+        success, message = delete_user(user_id)
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': message}), 400
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/users/update-password', methods=['POST'])
+@login_required
+@admin_required
+def update_password_endpoint():
+    """Update a user's password (admin only)"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        new_password = data.get('new_password', '').strip()
+
+        if not user_id or not new_password:
+            return jsonify({'success': False, 'error': 'User ID and new password are required'}), 400
+
+        if len(new_password) < 6:
+            return jsonify({'success': False, 'error': 'Password must be at least 6 characters'}), 400
+
+        success, message = update_user_password(user_id, new_password)
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': message}), 400
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/users/toggle-admin', methods=['POST'])
+@login_required
+@admin_required
+def toggle_admin_endpoint():
+    """Toggle admin status for a user (admin only)"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+
+        if not user_id:
+            return jsonify({'success': False, 'error': 'User ID is required'}), 400
+
+        # Prevent changing your own admin status
+        if int(user_id) == current_user.id:
+            return jsonify({'success': False, 'error': 'Cannot change your own admin status'}), 400
+
+        success, message = toggle_admin_status(user_id)
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': message}), 400
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/health')

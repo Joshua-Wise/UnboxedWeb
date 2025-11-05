@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - User Management</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .nav-bar {
+            background: #fff;
+            padding: 1rem 0;
+            border-bottom: 1px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 1rem;
+        }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #007bff;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        .nav-links a:hover {
+            background: #007bff;
+            color: white;
+        }
+        .nav-links a.active {
+            background: #007bff;
+            color: white;
+        }
+        .user-info {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .user-info .admin-badge {
+            background: #ffc107;
+            color: #000;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+        .user-info a {
+            color: #dc3545;
+            text-decoration: none;
+        }
+        .main-content {
+            margin-top: 80px;
+            padding: 3rem 0 4rem 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        .header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #218838;
+        }
+        .btn-warning {
+            background: #ffc107;
+            color: #000;
+        }
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .btn-sm {
+            padding: 0.25rem 0.6rem;
+            font-size: 0.8rem;
+        }
+        .users-table {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            overflow: hidden;
+            border: 1px solid #e9ecef;
+            margin-bottom: 1rem;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+        }
+        .table th,
+        .table td {
+            padding: 1rem 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #f1f3f4;
+            font-size: 0.9rem;
+            vertical-align: middle;
+        }
+        .table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .table tr:hover {
+            background: #f8f9fa;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .badge-admin {
+            background: #ffc107;
+            color: #000;
+        }
+        .badge-user {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-group {
+            display: flex;
+            gap: 0.3rem;
+            flex-wrap: wrap;
+        }
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+            display: none;
+        }
+        .alert.show {
+            display: block;
+        }
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .alert-danger {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal.show {
+            display: block;
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 10% auto;
+            padding: 2rem;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            margin-bottom: 1.5rem;
+        }
+        .modal-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #495057;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="password"] {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }
+        .form-group input[type="checkbox"] {
+            margin-right: 0.5rem;
+        }
+        .modal-footer {
+            margin-top: 1.5rem;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+        .close-btn {
+            background: #6c757d;
+            color: white;
+        }
+        .close-btn:hover {
+            background: #5a6268;
+        }
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-bar">
+        <div class="nav-content">
+            <div class="nav-links">
+                <a href="{{ url_for('index') }}">Convert Files</a>
+                <a href="{{ url_for('files') }}">My Files</a>
+                <a href="{{ url_for('admin_panel') }}" class="active">Admin Panel</a>
+            </div>
+            <div class="user-info">
+                <span class="admin-badge">ADMIN</span>
+                {{ current_user.username }} |
+                <a href="{{ url_for('logout') }}">Logout</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="container">
+            <div class="header-actions">
+                <h1 style="margin: 0; color: #333; font-size: 2rem; font-weight: 600;">User Management</h1>
+                <button class="btn btn-success" onclick="showCreateUserModal()">
+                    <i class="fas fa-user-plus"></i> Create New User
+                </button>
+            </div>
+
+            <div id="alert-container"></div>
+
+            <div class="users-table">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Role</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-tbody">
+                        <tr>
+                            <td colspan="5" style="text-align: center; padding: 2rem;">Loading users...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div id="createUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New User</h2>
+            </div>
+            <form id="createUserForm">
+                <div class="form-group">
+                    <label for="new-username">Username</label>
+                    <input type="text" id="new-username" required minlength="3">
+                </div>
+                <div class="form-group">
+                    <label for="new-password">Password</label>
+                    <input type="password" id="new-password" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="new-is-admin">
+                        Admin User
+                    </label>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn close-btn" onclick="hideCreateUserModal()">Cancel</button>
+                    <button type="submit" class="btn btn-success">Create User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update Password Modal -->
+    <div id="updatePasswordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Update Password</h2>
+            </div>
+            <form id="updatePasswordForm">
+                <input type="hidden" id="update-user-id">
+                <div class="form-group">
+                    <label for="update-username-display">Username</label>
+                    <input type="text" id="update-username-display" readonly style="background: #e9ecef;">
+                </div>
+                <div class="form-group">
+                    <label for="update-password">New Password</label>
+                    <input type="password" id="update-password" required minlength="6">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn close-btn" onclick="hideUpdatePasswordModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Load users on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadUsers();
+        });
+
+        function showAlert(message, type) {
+            const container = document.getElementById('alert-container');
+            container.innerHTML = `<div class="alert alert-${type} show">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/admin/users');
+                const data = await response.json();
+
+                if (data.success) {
+                    renderUsers(data.users);
+                } else {
+                    showAlert(data.error || 'Failed to load users', 'danger');
+                }
+            } catch (error) {
+                showAlert('Error loading users: ' + error.message, 'danger');
+            }
+        }
+
+        function renderUsers(users) {
+            const tbody = document.getElementById('users-tbody');
+
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">No users found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = users.map(user => `
+                <tr>
+                    <td>${user.id}</td>
+                    <td><strong>${user.username}</strong></td>
+                    <td>
+                        <span class="badge badge-${user.is_admin ? 'admin' : 'user'}">
+                            ${user.is_admin ? 'Admin' : 'User'}
+                        </span>
+                    </td>
+                    <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn btn-primary btn-sm" onclick="showUpdatePasswordModal(${user.id}, '${user.username}')">
+                                <i class="fas fa-key"></i> Password
+                            </button>
+                            <button class="btn btn-warning btn-sm" onclick="toggleAdmin(${user.id})">
+                                <i class="fas fa-user-shield"></i> ${user.is_admin ? 'Remove Admin' : 'Make Admin'}
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id}, '${user.username}')">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Create User Modal
+        function showCreateUserModal() {
+            document.getElementById('createUserModal').classList.add('show');
+            document.getElementById('createUserForm').reset();
+        }
+
+        function hideCreateUserModal() {
+            document.getElementById('createUserModal').classList.remove('show');
+        }
+
+        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = document.getElementById('new-username').value.trim();
+            const password = document.getElementById('new-password').value.trim();
+            const isAdmin = document.getElementById('new-is-admin').checked;
+
+            try {
+                const response = await fetch('/admin/users/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password, is_admin: isAdmin })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert(`User "${username}" created successfully!`, 'success');
+                    hideCreateUserModal();
+                    loadUsers();
+                } else {
+                    showAlert(data.error || 'Failed to create user', 'danger');
+                }
+            } catch (error) {
+                showAlert('Error creating user: ' + error.message, 'danger');
+            }
+        });
+
+        // Update Password Modal
+        function showUpdatePasswordModal(userId, username) {
+            document.getElementById('update-user-id').value = userId;
+            document.getElementById('update-username-display').value = username;
+            document.getElementById('update-password').value = '';
+            document.getElementById('updatePasswordModal').classList.add('show');
+        }
+
+        function hideUpdatePasswordModal() {
+            document.getElementById('updatePasswordModal').classList.remove('show');
+        }
+
+        document.getElementById('updatePasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const userId = document.getElementById('update-user-id').value;
+            const newPassword = document.getElementById('update-password').value.trim();
+
+            try {
+                const response = await fetch('/admin/users/update-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ user_id: userId, new_password: newPassword })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('Password updated successfully!', 'success');
+                    hideUpdatePasswordModal();
+                } else {
+                    showAlert(data.error || 'Failed to update password', 'danger');
+                }
+            } catch (error) {
+                showAlert('Error updating password: ' + error.message, 'danger');
+            }
+        });
+
+        // Toggle Admin Status
+        async function toggleAdmin(userId) {
+            if (!confirm('Are you sure you want to change this user\'s admin status?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/admin/users/toggle-admin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ user_id: userId })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('Admin status updated successfully!', 'success');
+                    loadUsers();
+                } else {
+                    showAlert(data.error || 'Failed to update admin status', 'danger');
+                }
+            } catch (error) {
+                showAlert('Error updating admin status: ' + error.message, 'danger');
+            }
+        }
+
+        // Delete User
+        async function deleteUser(userId, username) {
+            if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/admin/users/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ user_id: userId })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert(`User "${username}" deleted successfully!`, 'success');
+                    loadUsers();
+                } else {
+                    showAlert(data.error || 'Failed to delete user', 'danger');
+                }
+            } catch (error) {
+                showAlert('Error deleting user: ' + error.message, 'danger');
+            }
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('show');
+            }
+        }
+    </script>
+</body>
+</html>
