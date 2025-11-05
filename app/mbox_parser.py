@@ -3,6 +3,7 @@ import email
 from email.utils import parsedate_to_datetime
 from email.header import decode_header
 import html
+from app.attachment_handler import extract_attachments_from_message
 
 
 def decode_email_header(header):
@@ -105,15 +106,11 @@ def parse_mbox(filepath):
                 # Get email body
                 body = get_email_body(message)
                 
-                # Get attachments info
-                attachments = []
-                if message.is_multipart():
-                    for part in message.walk():
-                        content_disposition = str(part.get('Content-Disposition', ''))
-                        if 'attachment' in content_disposition:
-                            filename = part.get_filename()
-                            if filename:
-                                attachments.append(decode_email_header(filename))
+                # Extract full attachment information including content
+                attachment_objects = extract_attachments_from_message(message)
+
+                # Create legacy attachments list for backward compatibility
+                attachments = [att.filename for att in attachment_objects]
                 
                 email_data = {
                     'index': idx + 1,
@@ -123,7 +120,8 @@ def parse_mbox(filepath):
                     'cc': cc_addr,
                     'date': date_formatted,
                     'body': body,
-                    'attachments': attachments
+                    'attachments': attachments,  # Legacy list of filenames
+                    'attachment_objects': attachment_objects  # Full attachment data with content
                 }
                 
                 emails.append(email_data)

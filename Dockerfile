@@ -16,8 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY app/ ./app/
 
-# Create directories for uploads and outputs
-RUN mkdir -p /tmp/uploads /tmp/outputs
+# Create directories for uploads, outputs, and database
+RUN mkdir -p /tmp/uploads /tmp/outputs /app/data
 
 # Expose port
 EXPOSE 5000

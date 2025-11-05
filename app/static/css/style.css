@@ -6,7 +6,7 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #f5f7fa;
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -16,25 +16,28 @@ body {
 
 .container {
     background: white;
-    border-radius: 20px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
     max-width: 600px;
     width: 100%;
     overflow: hidden;
+    border: 1px solid #e9ecef;
 }
 
 header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 40px;
+    background: #ffffff;
+    color: #333;
+    padding: 30px 40px;
     text-align: center;
     position: relative;
+    border-bottom: 1px solid #e9ecef;
 }
 
 .header-content {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+    position: relative;
 }
 
 .header-text {
@@ -44,40 +47,42 @@ header {
 
 header h1 {
     font-size: 2rem;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #2c3e50;
 }
 
 .subtitle {
     font-size: 1rem;
-    opacity: 0.9;
+    color: #6c757d;
 }
 
 .settings-btn {
-    background: rgba(255, 255, 255, 0.2);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #495057;
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
     position: absolute;
-    right: 20px;
+    right: 0;
     top: 50%;
     transform: translateY(-50%);
 }
 
 .settings-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    border-color: rgba(255, 255, 255, 0.5);
-    transform: translateY(-50%) rotate(90deg);
+    background: #e9ecef;
+    border-color: #adb5bd;
+    transform: translateY(-50%) scale(1.05);
 }
 
 .settings-icon {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
 }
 
 main {
@@ -86,30 +91,35 @@ main {
 
 /* Upload Section */
 .upload-box {
-    border: 3px dashed #667eea;
+    border: 2px dashed #d0d0d0;
     border-radius: 15px;
     padding: 60px 40px;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
-    background: #f8f9ff;
+    background: #ffffff;
 }
 
 .upload-box:hover {
-    border-color: #764ba2;
-    background: #f0f3ff;
+    border-color: #999;
+    background: #fafafa;
     transform: translateY(-2px);
 }
 
 .upload-box.drag-over {
-    border-color: #764ba2;
-    background: #e8ebff;
+    border-color: #666;
+    background: #f5f5f5;
     transform: scale(1.02);
 }
 
 .upload-icon {
     font-size: 4rem;
     margin-bottom: 20px;
+    color: #6c757d;
+}
+
+.upload-icon i {
+    display: block;
 }
 
 .upload-box h2 {
@@ -137,7 +147,7 @@ main {
 
 .spinner {
     border: 4px solid #f3f3f3;
-    border-top: 4px solid #667eea;
+    border-top: 4px solid #007bff;
     border-radius: 50%;
     width: 60px;
     height: 60px;
@@ -171,6 +181,11 @@ main {
 .success-icon {
     font-size: 5rem;
     margin-bottom: 20px;
+    color: #28a745;
+}
+
+.success-icon i {
+    display: block;
 }
 
 .result-section h2 {
@@ -186,24 +201,26 @@ main {
 }
 
 .download-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #007bff;
     color: white;
     border: none;
-    padding: 15px 40px;
-    font-size: 1.1rem;
-    border-radius: 50px;
+    padding: 12px 32px;
+    font-size: 1rem;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.25);
     margin-bottom: 15px;
     display: inline-flex;
     align-items: center;
     gap: 10px;
+    font-weight: 500;
 }
 
 .download-btn:hover {
+    background: #0056b3;
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.35);
 }
 
 .download-btn:active {
@@ -212,19 +229,21 @@ main {
 
 .new-conversion-btn {
     background: transparent;
-    color: #667eea;
-    border: 2px solid #667eea;
-    padding: 12px 30px;
-    font-size: 1rem;
-    border-radius: 50px;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+    padding: 10px 24px;
+    font-size: 0.95rem;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
     margin-top: 10px;
+    font-weight: 500;
 }
 
 .new-conversion-btn:hover {
-    background: #667eea;
-    color: white;
+    background: #f8f9fa;
+    border-color: #adb5bd;
+    color: #495057;
 }
 
 /* Error Section */
@@ -236,6 +255,11 @@ main {
 .error-icon {
     font-size: 5rem;
     margin-bottom: 20px;
+    color: #dc3545;
+}
+
+.error-icon i {
+    display: block;
 }
 
 .error-section h2 {
@@ -312,12 +336,13 @@ main {
 }
 
 .settings-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: #ffffff;
+    color: #2c3e50;
     padding: 25px 30px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    border-bottom: 1px solid #e9ecef;
 }
 
 .settings-header h2 {
@@ -328,7 +353,7 @@ main {
 .close-btn {
     background: transparent;
     border: none;
-    color: white;
+    color: #6c757d;
     font-size: 2rem;
     cursor: pointer;
     width: 40px;
@@ -341,8 +366,8 @@ main {
 }
 
 .close-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: rotate(90deg);
+    background: #f8f9fa;
+    color: #495057;
 }
 
 .settings-content {
@@ -418,20 +443,22 @@ main {
 }
 
 .save-settings-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #007bff;
     color: white;
     border: none;
-    padding: 12px 30px;
-    font-size: 1rem;
-    border-radius: 50px;
+    padding: 10px 28px;
+    font-size: 0.95rem;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.25);
+    font-weight: 500;
 }
 
 .save-settings-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    background: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0, 123, 255, 0.35);
 }
 
 .save-settings-btn:active {
@@ -440,12 +467,13 @@ main {
 
 /* Footer */
 footer {
-    background: #f8f9fa;
+    background: #ffffff;
     padding: 20px;
     text-align: center;
-    color: #666;
-    font-size: 0.9rem;
+    color: #6c757d;
+    font-size: 0.85rem;
     border-top: 1px solid #e9ecef;
+    margin-top: 20px;
 }
 
 /* Responsive */

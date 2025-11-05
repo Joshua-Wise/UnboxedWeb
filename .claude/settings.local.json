@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(chmod:*)",
+      "Bash(tree:*)",
+      "Bash(pip3 install:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(python -c \"\nimport os\nos.makedirs(''/tmp/uploads'', exist_ok=True)\nos.makedirs(''/tmp/outputs'', exist_ok=True)\nprint(''Directories created'')\nls -la /tmp/uploads /tmp/outputs\n\")",
+      "Bash(lsof:*)",
+      "Bash(curl:*)",
+      "Bash(http://localhost:8080/upload)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker exec:*)",
+      "Bash(http://localhost:8080/login)",
+      "Bash(docker cp:*)",
+      "Bash(xargs kill:*)",
+      "Bash(docker --version:*)",
+      "Bash(docker-compose restart:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

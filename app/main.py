@@ -2,10 +2,16 @@ import os
 import json
 import zipfile
 import shutil
-from flask import Flask, request, render_template, send_file, jsonify
+import threading
+import time
+from urllib.parse import unquote
+from flask import Flask, request, render_template, send_file, jsonify, redirect, url_for, flash, session
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 from app.mbox_parser import parse_mbox
 from app.pdf_generator import generate_pdf, generate_separate_pdfs
+from app.users import User, authenticate_user, init_db, migrate_json_to_sqlite
+from app.file_manager import register_file, get_user_files, get_file_info, delete_file_record, get_stats_for_user, cleanup_orphaned_files
 
 app = Flask(__name__)
 
@@ -13,25 +19,85 @@ app = Flask(__name__)
 UPLOAD_FOLDER = '/tmp/uploads'
 OUTPUT_FOLDER = '/tmp/outputs'
 ALLOWED_EXTENSIONS = {'mbox', 'mbx'}
+FILE_CLEANUP_DELAY = 3600  # 1 hour in seconds
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
+app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'  # Change this in production!
+
+# Initialize database on startup
+print("Initializing database...")
+init_db()
+migrate_json_to_sqlite()
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
 
 # Create necessary directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
+@login_manager.user_loader
+def load_user(user_id):
+    return User.get(user_id)
+
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def schedule_file_cleanup(file_path, delay_seconds=FILE_CLEANUP_DELAY):
+    """Schedule file deletion after a delay using a background thread"""
+    def delayed_cleanup():
+        time.sleep(delay_seconds)
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"Cleaned up file: {file_path}")
+        except Exception as e:
+            print(f"Failed to cleanup file {file_path}: {str(e)}")
+
+    # Start cleanup in a daemon thread so it doesn't prevent app shutdown
+    cleanup_thread = threading.Thread(target=delayed_cleanup, daemon=True)
+    cleanup_thread.start()
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        user = authenticate_user(username, password)
+        if user:
+            login_user(user)
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='Invalid username or password')
+
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 
 @app.route('/upload', methods=['POST'])
+@login_required
 def upload_file():
     # Check for multiple files (new format) or single file (backward compatibility)
     files = request.files.getlist('files')
@@ -55,6 +121,7 @@ def upload_file():
         settings_json = request.form.get('settings', '{}')
         settings = json.loads(settings_json)
         separate_pdfs = settings.get('separatePDFs', False)
+        include_attachments = settings.get('includeAttachments', True)
         naming_config = settings.get('naming', {
             'items': [
                 {'id': 'subject', 'enabled': True},
@@ -101,7 +168,7 @@ def upload_file():
             temp_pdf_dir = os.path.join(app.config['OUTPUT_FOLDER'], f'{base_filename}_pdfs')
             os.makedirs(temp_pdf_dir, exist_ok=True)
 
-            pdf_files = generate_separate_pdfs(emails, temp_pdf_dir, base_filename, naming_config)
+            pdf_files = generate_separate_pdfs(emails, temp_pdf_dir, base_filename, naming_config, include_attachments)
 
             if not pdf_files:
                 return jsonify({'error': 'Failed to generate PDF files'}), 500
@@ -122,11 +189,23 @@ def upload_file():
             # Generate single PDF with all emails
             output_filename = f"{base_filename}.pdf"
             output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
-            generate_pdf(emails, output_path)
+            generate_pdf(emails, output_path, include_attachments)
 
         # Clean up uploaded files
         for filepath in saved_filepaths:
             os.remove(filepath)
+
+        # Register file with user ownership
+        file_type = 'zip' if separate_pdfs else 'pdf'
+        original_mbox_name = files[0].filename if len(files) == 1 else f'{len(files)} MBOX files'
+        register_file(
+            filename=output_filename,
+            user_id=current_user.id,
+            file_type=file_type,
+            email_count=len(emails),
+            separate_pdfs=separate_pdfs,
+            original_mbox_name=original_mbox_name
+        )
 
         return jsonify({
             'success': True,
@@ -139,26 +218,68 @@ def upload_file():
         return jsonify({'error': f'Error processing file: {str(e)}'}), 500
 
 
+@app.route('/files')
+@login_required
+def files():
+    user_files = get_user_files(current_user.id)
+    stats = get_stats_for_user(current_user.id)
+
+    # Clean up orphaned files from database
+    cleanup_orphaned_files()
+
+    message = request.args.get('message')
+    success = request.args.get('success', 'false') == 'true'
+
+    return render_template('files.html', files=user_files, stats=stats, message=message, success=success)
+
+
+@app.route('/delete-file', methods=['POST'])
+@login_required
+def delete_file():
+    filename = request.form.get('filename')
+    if not filename:
+        return redirect(url_for('files', message='No filename provided', success='false'))
+
+    # Check if file belongs to current user
+    file_info = get_file_info(filename)
+    if not file_info or file_info.get('user_id') != current_user.id:
+        return redirect(url_for('files', message='File not found or access denied', success='false'))
+
+    # Delete file
+    success = delete_file_record(filename)
+    if success:
+        return redirect(url_for('files', message='File deleted successfully', success='true'))
+    else:
+        return redirect(url_for('files', message='Failed to delete file', success='false'))
+
+
 @app.route('/download/<filename>')
+@login_required
 def download_file(filename):
     try:
-        output_path = os.path.join(app.config['OUTPUT_FOLDER'], secure_filename(filename))
-        
+        # Decode URL-encoded filename (e.g., %40 -> @)
+        decoded_filename = unquote(filename)
+
+        # Security check: prevent directory traversal attacks
+        if '..' in decoded_filename or '/' in decoded_filename or '\\' in decoded_filename:
+            return jsonify({'error': 'Invalid filename'}), 400
+
+        # Check if file belongs to current user
+        file_info = get_file_info(decoded_filename)
+        if not file_info or file_info.get('user_id') != current_user.id:
+            return jsonify({'error': 'File not found or access denied'}), 404
+
+        output_path = os.path.join(app.config['OUTPUT_FOLDER'], decoded_filename)
+
         if not os.path.exists(output_path):
             return jsonify({'error': 'File not found'}), 404
-        
-        response = send_file(output_path, as_attachment=True, download_name=filename)
-        
-        # Clean up generated file after sending
-        @response.call_on_close
-        def cleanup():
-            try:
-                os.remove(output_path)
-            except:
-                pass
-        
+
+        response = send_file(output_path, as_attachment=True, download_name=decoded_filename)
+
+        # No automatic cleanup - files persist until manually deleted by user
+
         return response
-    
+
     except Exception as e:
         return jsonify({'error': f'Error downloading file: {str(e)}'}), 500
 

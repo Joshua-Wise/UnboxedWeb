@@ -20,10 +20,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const settingsOverlay = document.getElementById('settingsOverlay');
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
     const saveSettingsBtn = document.getElementById('saveSettingsBtn');
-    const pageSizeSelect = document.getElementById('pageSize');
     const separatePDFsCheckbox = document.getElementById('separatePDFs');
     const includeAttachmentsCheckbox = document.getElementById('includeAttachments');
-    const darkModeCheckbox = document.getElementById('darkMode');
 
     // Naming options elements
     const namingOptions = document.getElementById('namingOptions');
@@ -120,8 +118,14 @@ document.addEventListener('DOMContentLoaded', function() {
             fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
 
             const removeBtn = document.createElement('button');
-            removeBtn.textContent = '✕';
-            removeBtn.style.cssText = 'background: #ff4444; color: white; border: none; border-radius: 3px; padding: 4px 8px; cursor: pointer;';
+            removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+            removeBtn.style.cssText = 'background: #dc3545; color: white; border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; transition: all 0.2s;';
+            removeBtn.addEventListener('mouseenter', function() {
+                this.style.background = '#c82333';
+            });
+            removeBtn.addEventListener('mouseleave', function() {
+                this.style.background = '#dc3545';
+            });
             removeBtn.addEventListener('click', function() {
                 selectedFiles.splice(index, 1);
                 if (selectedFiles.length === 0) {
@@ -364,9 +368,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load settings from localStorage
         const settings = getSettings();
 
-        if (settings.pageSize) {
-            pageSizeSelect.value = settings.pageSize;
-        }
         if (settings.separatePDFs !== undefined) {
             separatePDFsCheckbox.checked = settings.separatePDFs;
             // Show/hide naming options based on saved setting
@@ -374,9 +375,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (settings.includeAttachments !== undefined) {
             includeAttachmentsCheckbox.checked = settings.includeAttachments;
-        }
-        if (settings.darkMode !== undefined) {
-            darkModeCheckbox.checked = settings.darkMode;
         }
         // Initialize naming items
         if (settings.namingItems && Array.isArray(settings.namingItems)) {
@@ -388,10 +386,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function getSettings() {
         const savedSettings = localStorage.getItem('mboxConverterSettings');
         return savedSettings ? JSON.parse(savedSettings) : {
-            pageSize: 'A4',
+            pageSize: 'Letter',
             separatePDFs: false,
             includeAttachments: true,
-            darkMode: false,
             namingItems: [
                 { id: 'subject', label: 'Subject', enabled: true },
                 { id: 'date', label: 'Date', enabled: false },
@@ -402,10 +399,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function saveSettings() {
         const settings = {
-            pageSize: pageSizeSelect.value,
+            pageSize: 'Letter',  // Default to Letter
             separatePDFs: separatePDFsCheckbox.checked,
             includeAttachments: includeAttachmentsCheckbox.checked,
-            darkMode: darkModeCheckbox.checked,
             namingItems: namingItems
         };
 

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Files - MBOX to PDF Converter</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .nav-bar {
+            background: #fff;
+            padding: 1rem 0;
+            border-bottom: 1px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 1rem;
+        }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #007bff;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        .nav-links a:hover {
+            background: #007bff;
+            color: white;
+        }
+        .nav-links a.active {
+            background: #007bff;
+            color: white;
+        }
+        .user-info {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .user-info a {
+            color: #dc3545;
+            text-decoration: none;
+        }
+        .main-content {
+            margin-top: 80px;
+            padding: 3rem 0 4rem 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .stat-card {
+            background: white;
+            padding: 1rem 0.75rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #e9ecef;
+            min-height: 90px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .stat-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .stat-number {
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: #007bff;
+            margin-bottom: 0.35rem;
+            line-height: 1;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 0.7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            line-height: 1.2;
+        }
+        .files-table {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            overflow: hidden;
+            border: 1px solid #e9ecef;
+            margin-bottom: 1rem;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+        }
+        .table th,
+        .table td {
+            padding: 1rem 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #f1f3f4;
+            font-size: 0.9rem;
+            vertical-align: top;
+        }
+        .table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .table tr:hover {
+            background: #f8f9fa;
+        }
+        .file-type {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .file-type.pdf {
+            background: #d4edda;
+            color: #155724;
+        }
+        .file-type.zip {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .btn {
+            padding: 0.375rem 0.75rem;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem 5rem 2rem;
+            color: #666;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            border: 1px solid #e9ecef;
+            margin-bottom: 1rem;
+        }
+        .empty-state h3 {
+            margin-bottom: 0.75rem;
+            color: #495057;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        .empty-state p {
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        .status-missing {
+            color: #dc3545;
+            font-style: italic;
+        }
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .alert-danger {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .filename-cell {
+            line-height: 1.4;
+        }
+        .filename-main {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.25rem;
+        }
+        .filename-source {
+            color: #666;
+            font-size: 0.8rem;
+            line-height: 1.3;
+        }
+        .file-type-cell {
+            line-height: 1.4;
+        }
+        .date-cell {
+            line-height: 1.3;
+        }
+        .date-main {
+            font-weight: 500;
+            color: #333;
+        }
+        .date-time {
+            color: #666;
+            font-size: 0.8rem;
+            margin-top: 0.1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-bar">
+        <div class="nav-content">
+            <div class="nav-links">
+                <a href="{{ url_for('index') }}">Convert Files</a>
+                <a href="{{ url_for('files') }}" class="active">My Files</a>
+            </div>
+            <div class="user-info">
+                {{ current_user.username }} |
+                <a href="{{ url_for('logout') }}">Logout</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="container">
+            <h1 style="margin-bottom: 1rem; margin-top: 1rem; color: #333; font-size: 2rem; font-weight: 600; text-align: center;">My Files</h1>
+
+        {% if message %}
+            <div class="alert alert-{{ 'success' if success else 'danger' }}">
+                {{ message }}
+            </div>
+        {% endif %}
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.total_files }}</div>
+                <div class="stat-label">Total Files</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.existing_files }}</div>
+                <div class="stat-label">Available Files</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.total_size_formatted }}</div>
+                <div class="stat-label">Total Size</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.pdf_files }}</div>
+                <div class="stat-label">PDF Files</div>
+            </div>
+        </div>
+
+        {% if files %}
+            <div class="files-table">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Filename</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Emails</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for file in files %}
+                        <tr>
+                            <td class="filename-cell">
+                                {% if file.exists %}
+                                    <div class="filename-main">{{ file.filename }}</div>
+                                    {% if file.original_mbox_name %}
+                                        <div class="filename-source">From: {{ file.original_mbox_name }}.mbox</div>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="status-missing">{{ file.filename }} (Missing)</span>
+                                {% endif %}
+                            </td>
+                            <td class="file-type-cell">
+                                <div class="file-type {{ file.file_type }}">{{ file.file_type }}</div>
+                                {% if file.separate_pdfs %}
+                                    <div style="font-size: 0.8rem; color: #666; margin-top: 0.25rem;">Separate PDFs</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if file.exists %}
+                                    {{ (file.file_size / 1024 / 1024) | round(1) }} MB
+                                {% else %}
+                                    <span class="status-missing">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ file.email_count }}</td>
+                            <td class="date-cell">
+                                <div class="date-main">{{ file.created_at[:10] }}</div>
+                                <div class="date-time">{{ file.created_at[11:19] }}</div>
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    {% if file.exists %}
+                                        <a href="{{ url_for('download_file', filename=file.filename) }}"
+                                           class="btn btn-primary">Download</a>
+                                    {% endif %}
+                                    <form method="POST" action="{{ url_for('delete_file') }}"
+                                          style="display: inline;"
+                                          onsubmit="return confirm('Are you sure you want to delete {{ file.filename }}?')">
+                                        <input type="hidden" name="filename" value="{{ file.filename }}">
+                                        <button type="submit" class="btn btn-danger">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <h3>No files yet</h3>
+                <p>You haven't converted any MBOX files yet.</p>
+                <a href="{{ url_for('index') }}" class="btn btn-primary">Convert Files Now</a>
+            </div>
+        {% endif %}
+        </div>
+    </div>
+</body>
+</html>

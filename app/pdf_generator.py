@@ -2,15 +2,74 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_LEFT
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle, Image
 from reportlab.lib import colors
 from io import BytesIO
 import os
 import re
+from app.attachment_handler import get_attachment_summary
 
 
-def generate_pdf(emails, output_path):
+def generate_pdf(emails, output_path, include_attachments=True):
     """Generate a PDF from a list of email dictionaries"""
+    import tempfile
+    
+    # Check if we have PDF attachments that need merging
+    has_pdf_attachments = False
+    if include_attachments:
+        for email in emails:
+            if email.get('attachment_objects'):
+                for attachment in email['attachment_objects']:
+                    if attachment.embed_type == 'pdf' and attachment.processed_content:
+                        has_pdf_attachments = True
+                        break
+            if has_pdf_attachments:
+                break
+    
+    # If we have PDF attachments, generate to temp file first, then merge
+    if has_pdf_attachments:
+        print(f"PDF attachments detected. Using two-step generation process.")
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
+            temp_path = tmp_file.name
+        
+        try:
+            # Generate base PDF to temp file
+            print(f"Generating base PDF to temp file: {temp_path}")
+            _generate_pdf_content(emails, temp_path, include_attachments)
+            
+            if not os.path.exists(temp_path):
+                print(f"ERROR: Base PDF was not created at {temp_path}")
+                raise Exception("Base PDF generation failed")
+            
+            # Merge PDF attachments into final output
+            print(f"Merging PDF attachments into final output: {output_path}")
+            merge_pdf_attachments_post_build(temp_path, emails, output_path)
+            
+            if os.path.exists(output_path):
+                print(f"SUCCESS: Final PDF created at {output_path}")
+            else:
+                print(f"ERROR: Final PDF was not created at {output_path}")
+        except Exception as e:
+            print(f"ERROR in PDF generation with attachments: {str(e)}")
+            # If temp file exists but final doesn't, copy it as fallback
+            if os.path.exists(temp_path) and not os.path.exists(output_path):
+                print(f"Fallback: Copying temp file to output")
+                import shutil
+                shutil.copy2(temp_path, output_path)
+            raise
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+                print(f"Cleaned up temp file: {temp_path}")
+    else:
+        # No PDF attachments, generate directly to output
+        print(f"No PDF attachments detected. Generating directly to output.")
+        _generate_pdf_content(emails, output_path, include_attachments)
+
+
+def _generate_pdf_content(emails, output_path, include_attachments=True):
+    """Internal function to generate PDF content"""
     
     # Create PDF document
     doc = SimpleDocTemplate(
@@ -76,20 +135,26 @@ def generate_pdf(emails, output_path):
         metadata = []
         
         if email.get('from'):
-            metadata.append(['From:', clean_text(email['from'])])
+            metadata.append(['From:', clean_text_for_table(email['from'])])
         
         if email.get('to'):
-            metadata.append(['To:', clean_text(email['to'])])
+            metadata.append(['To:', clean_text_for_table(email['to'])])
         
         if email.get('cc'):
-            metadata.append(['Cc:', clean_text(email['cc'])])
+            metadata.append(['Cc:', clean_text_for_table(email['cc'])])
         
         if email.get('date'):
-            metadata.append(['Date:', clean_text(email['date'])])
+            metadata.append(['Date:', clean_text_for_table(email['date'])])
         
         if email.get('attachments'):
-            attachments_str = ', '.join(email['attachments'])
-            metadata.append(['Attachments:', clean_text(attachments_str)])
+            if include_attachments:
+                # When attachments are embedded, just show count
+                attachment_count = len(email['attachments'])
+                metadata.append(['Attachments:', f'{attachment_count} file(s) - see embedded content below'])
+            else:
+                # When attachments are not embedded, show full list
+                attachments_str = ', '.join(email['attachments'])
+                metadata.append(['Attachments:', clean_text_for_table(attachments_str)])
         
         if metadata:
             metadata_table = Table(metadata, colWidths=[1*inch, 5.5*inch])
@@ -111,7 +176,7 @@ def generate_pdf(emails, output_path):
         body = email.get('body', '(No content)')
         if body:
             story.append(Paragraph('<b>Message:</b>', header_style))
-            
+
             # Split body into paragraphs and add each
             body_paragraphs = body.split('\n')
             for para in body_paragraphs:
@@ -122,7 +187,13 @@ def generate_pdf(emails, output_path):
                     except:
                         # Fallback for problematic text
                         story.append(Paragraph(escape_text(cleaned_para), body_style))
-        
+
+        story.append(Spacer(1, 0.2*inch))
+
+        # Embed attachments if present and enabled
+        if include_attachments:
+            embed_attachments_in_story(story, email, styles)
+
         story.append(Spacer(1, 0.2*inch))
     
     # Build PDF
@@ -151,6 +222,27 @@ def clean_text(text):
     return text
 
 
+def clean_text_for_table(text):
+    """Clean text for table cells (no XML escaping needed)"""
+    if not text:
+        return ''
+    
+    text = str(text)
+    # Only escape ampersand to prevent issues
+    text = text.replace('&', '&amp;')
+    
+    # Remove problematic line breaks
+    text = text.replace('\r\n', ' ')
+    text = text.replace('\r', ' ')
+    text = text.replace('\n', ' ')
+    
+    # Limit length
+    if len(text) > 10000:
+        text = text[:10000] + '... [truncated]'
+    
+    return text
+
+
 def escape_text(text):
     """More aggressive text escaping for problematic content"""
     if not text:
@@ -170,6 +262,186 @@ def escape_text(text):
             result.append(' ')
 
     return ''.join(result)
+
+
+def embed_attachments_in_story(story, email, styles):
+    """Embed supported attachments into the PDF story"""
+    attachment_objects = email.get('attachment_objects', [])
+
+    if not attachment_objects:
+        return
+
+    # Get attachment summary
+    attachment_summary = get_attachment_summary(attachment_objects)
+
+    # Create attachment header style
+    attachment_header_style = ParagraphStyle(
+        'AttachmentHeader',
+        parent=styles['Normal'],
+        fontSize=12,
+        textColor=colors.HexColor('#333333'),
+        spaceAfter=8,
+        spaceBefore=8,
+        leftIndent=10,
+        fontName='Helvetica-Bold'
+    )
+
+    attachment_text_style = ParagraphStyle(
+        'AttachmentText',
+        parent=styles['Normal'],
+        fontSize=9,
+        textColor=colors.HexColor('#000000'),
+        spaceAfter=6,
+        leftIndent=20,
+        fontName='Helvetica'
+    )
+
+    # Add attachments header
+    story.append(Paragraph('<b>Attachments:</b>', attachment_header_style))
+
+    # Display attachment summary table
+    if attachment_summary:
+        summary_data = [['Filename', 'Size', 'Type', 'Status']]
+        for att in attachment_summary:
+            summary_data.append([
+                clean_text(att['filename'][:30] + '...' if len(att['filename']) > 30 else att['filename']),
+                att['size'],
+                clean_text(att['type'][:20] + '...' if len(att['type']) > 20 else att['type']),
+                att['status']
+            ])
+
+        summary_table = Table(summary_data, colWidths=[2.5*inch, 0.8*inch, 1.5*inch, 1.7*inch])
+        summary_table.setStyle(TableStyle([
+            ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 8),
+            ('FONT', (0, 1), (-1, -1), 'Helvetica', 8),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#333333')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        story.append(summary_table)
+        story.append(Spacer(1, 0.1*inch))
+
+    # Embed supported attachments
+    embedded_count = 0
+    for attachment in attachment_objects:
+        if not attachment.is_supported or attachment.error_message:
+            continue
+
+        try:
+            if attachment.embed_type == 'image' and attachment.processed_content:
+                embed_image_attachment(story, attachment, attachment_text_style)
+                embedded_count += 1
+
+            elif attachment.embed_type == 'text' and attachment.processed_content:
+                embed_text_attachment(story, attachment, attachment_text_style)
+                embedded_count += 1
+
+            elif attachment.embed_type == 'pdf' and attachment.processed_content:
+                embed_pdf_attachment(story, attachment, attachment_text_style)
+                embedded_count += 1
+
+        except Exception as e:
+            # Add error message for failed embeddings
+            story.append(Paragraph(
+                f'<b>Error embedding {attachment.filename}:</b> {str(e)}',
+                attachment_text_style
+            ))
+
+    if embedded_count > 0:
+        story.append(Spacer(1, 0.1*inch))
+
+
+def embed_image_attachment(story, attachment, text_style):
+    """Embed an image attachment into the PDF story"""
+    try:
+        # Add filename header
+        story.append(Paragraph(f'<b>📷 {clean_text(attachment.filename)}</b>', text_style))
+
+        # Create image from processed content
+        image_data = attachment.processed_content['image_data']
+        width = attachment.processed_content['width']
+        height = attachment.processed_content['height']
+
+        # Calculate display size (max 6 inches wide, maintain aspect ratio)
+        max_width = 6 * inch
+        max_height = 4 * inch
+
+        aspect_ratio = width / height
+        if width > height:
+            display_width = min(max_width, width * 72 / 96)  # Convert pixels to points
+            display_height = display_width / aspect_ratio
+        else:
+            display_height = min(max_height, height * 72 / 96)
+            display_width = display_height * aspect_ratio
+
+        # Create ReportLab Image from bytes
+        img = Image(BytesIO(image_data), width=display_width, height=display_height)
+        img.hAlign = 'LEFT'
+
+        story.append(img)
+        story.append(Spacer(1, 0.1*inch))
+
+    except Exception as e:
+        story.append(Paragraph(f'Error displaying image {attachment.filename}: {str(e)}', text_style))
+
+
+def embed_text_attachment(story, attachment, text_style):
+    """Embed a text attachment into the PDF story"""
+    try:
+        # Add filename header
+        story.append(Paragraph(f'<b>📄 {clean_text(attachment.filename)}</b>', text_style))
+
+        # Get processed text content
+        text_content = attachment.processed_content['text']
+        truncated = attachment.processed_content.get('truncated', False)
+
+        # Add truncation notice if applicable
+        if truncated:
+            story.append(Paragraph('<i>[Content truncated due to length]</i>', text_style))
+
+        # Split into paragraphs and add each
+        paragraphs = text_content.split('\n')
+        for para in paragraphs[:50]:  # Limit to 50 paragraphs to prevent huge documents
+            cleaned_para = clean_text(para.strip())
+            if cleaned_para:
+                try:
+                    story.append(Paragraph(cleaned_para, text_style))
+                except:
+                    story.append(Paragraph(escape_text(cleaned_para), text_style))
+
+        if len(paragraphs) > 50:
+            story.append(Paragraph('<i>[Additional content truncated for PDF size]</i>', text_style))
+
+        story.append(Spacer(1, 0.1*inch))
+
+    except Exception as e:
+        story.append(Paragraph(f'Error displaying text file {attachment.filename}: {str(e)}', text_style))
+
+
+def embed_pdf_attachment(story, attachment, text_style):
+    """Add a note that PDF attachment will be merged"""
+    try:
+        # Add filename header with page count info
+        page_count = attachment.processed_content.get('page_count', '?')
+        size_mb = attachment.processed_content["size"] / (1024 * 1024)
+        
+        story.append(Paragraph(
+            f'<b>{clean_text_for_table(attachment.filename)}</b> (PDF - {size_mb:.1f} MB, {page_count} page{"s" if page_count != 1 else ""})',
+            text_style
+        ))
+        story.append(Paragraph(
+            '<i>PDF attachment will be appended at the end of this document.</i>',
+            text_style
+        ))
+        story.append(Spacer(1, 0.05*inch))
+
+    except Exception as e:
+        story.append(Paragraph(f'Error processing PDF {attachment.filename}: {str(e)}', text_style))
 
 
 def sanitize_filename(text, max_length=50):
@@ -195,8 +467,61 @@ def sanitize_filename(text, max_length=50):
     return text
 
 
-def generate_single_email_pdf(email, output_path):
+def generate_single_email_pdf(email, output_path, include_attachments=True):
     """Generate a PDF for a single email"""
+    import tempfile
+    
+    # Check if we have PDF attachments that need merging
+    has_pdf_attachments = False
+    if include_attachments and email.get('attachment_objects'):
+        for attachment in email['attachment_objects']:
+            if attachment.embed_type == 'pdf' and attachment.processed_content:
+                has_pdf_attachments = True
+                break
+    
+    # If we have PDF attachments, generate to temp file first, then merge
+    if has_pdf_attachments:
+        print(f"PDF attachment detected in single email. Using two-step generation.")
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
+            temp_path = tmp_file.name
+        
+        try:
+            # Generate base PDF to temp file
+            print(f"Generating base PDF to temp file: {temp_path}")
+            _generate_single_email_pdf_content(email, temp_path, include_attachments)
+            
+            if not os.path.exists(temp_path):
+                print(f"ERROR: Base PDF was not created at {temp_path}")
+                raise Exception("Base PDF generation failed")
+            
+            # Merge PDF attachments into final output
+            print(f"Merging PDF attachments into: {output_path}")
+            merge_pdf_attachments_post_build(temp_path, [email], output_path)
+            
+            if os.path.exists(output_path):
+                print(f"SUCCESS: Final PDF created at {output_path}")
+            else:
+                print(f"ERROR: Final PDF was not created at {output_path}")
+        except Exception as e:
+            print(f"ERROR in single email PDF generation: {str(e)}")
+            # If temp file exists but final doesn't, copy it as fallback
+            if os.path.exists(temp_path) and not os.path.exists(output_path):
+                print(f"Fallback: Copying temp file to output")
+                import shutil
+                shutil.copy2(temp_path, output_path)
+            raise
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+                print(f"Cleaned up temp file")
+    else:
+        # No PDF attachments, generate directly to output
+        _generate_single_email_pdf_content(email, output_path, include_attachments)
+
+
+def _generate_single_email_pdf_content(email, output_path, include_attachments=True):
+    """Internal function to generate single email PDF content"""
 
     # Create PDF document
     doc = SimpleDocTemplate(
@@ -251,20 +576,26 @@ def generate_single_email_pdf(email, output_path):
     metadata = []
 
     if email.get('from'):
-        metadata.append(['From:', clean_text(email['from'])])
+        metadata.append(['From:', clean_text_for_table(email['from'])])
 
     if email.get('to'):
-        metadata.append(['To:', clean_text(email['to'])])
+        metadata.append(['To:', clean_text_for_table(email['to'])])
 
     if email.get('cc'):
-        metadata.append(['Cc:', clean_text(email['cc'])])
+        metadata.append(['Cc:', clean_text_for_table(email['cc'])])
 
     if email.get('date'):
-        metadata.append(['Date:', clean_text(email['date'])])
+        metadata.append(['Date:', clean_text_for_table(email['date'])])
 
     if email.get('attachments'):
-        attachments_str = ', '.join(email['attachments'])
-        metadata.append(['Attachments:', clean_text(attachments_str)])
+        if include_attachments:
+            # When attachments are embedded, just show count
+            attachment_count = len(email['attachments'])
+            metadata.append(['Attachments:', f'{attachment_count} file(s) - see embedded content below'])
+        else:
+            # When attachments are not embedded, show full list
+            attachments_str = ', '.join(email['attachments'])
+            metadata.append(['Attachments:', clean_text_for_table(attachments_str)])
 
     if metadata:
         metadata_table = Table(metadata, colWidths=[1*inch, 5.5*inch])
@@ -300,8 +631,88 @@ def generate_single_email_pdf(email, output_path):
 
     story.append(Spacer(1, 0.2*inch))
 
+    # Embed attachments if present and enabled
+    if include_attachments:
+        embed_attachments_in_story(story, email, styles)
+
+    story.append(Spacer(1, 0.2*inch))
+
     # Build PDF
     doc.build(story)
+
+
+def merge_pdf_attachments_post_build(base_pdf_path, emails, output_path):
+    """Merge PDF attachments after main PDF is built"""
+    from pypdf import PdfReader, PdfWriter
+    import tempfile
+    import shutil
+    
+    try:
+        # Check if there are any PDF attachments to merge
+        has_pdf_attachments = False
+        for email in emails:
+            if email.get('attachment_objects'):
+                for attachment in email['attachment_objects']:
+                    if attachment.embed_type == 'pdf' and attachment.processed_content:
+                        has_pdf_attachments = True
+                        break
+            if has_pdf_attachments:
+                break
+        
+        # If no PDF attachments, just copy the base file
+        if not has_pdf_attachments:
+            shutil.copy2(base_pdf_path, output_path)
+            return
+        
+        writer = PdfWriter()
+        
+        # Add base PDF pages
+        try:
+            base_reader = PdfReader(base_pdf_path)
+            for page in base_reader.pages:
+                writer.add_page(page)
+        except Exception as e:
+            print(f"Error reading base PDF: {str(e)}")
+            # Fall back to copying the base file
+            shutil.copy2(base_pdf_path, output_path)
+            return
+        
+        # Add PDF attachment pages after the main content
+        for email in emails:
+            if email.get('attachment_objects'):
+                for attachment in email['attachment_objects']:
+                    if attachment.embed_type == 'pdf' and attachment.processed_content:
+                        try:
+                            pdf_data = attachment.processed_content['pdf_data']
+                            # Create temp file for attachment
+                            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+                                tmp.write(pdf_data)
+                                tmp_path = tmp.name
+                            
+                            try:
+                                att_reader = PdfReader(tmp_path)
+                                for page in att_reader.pages:
+                                    writer.add_page(page)
+                            finally:
+                                os.unlink(tmp_path)
+                        except Exception as e:
+                            print(f"Warning: Failed to merge PDF attachment {attachment.filename}: {str(e)}")
+                            continue
+        
+        # Write final merged PDF
+        with open(output_path, 'wb') as output_file:
+            writer.write(output_file)
+            
+    except Exception as e:
+        print(f"Critical error in PDF merge process: {str(e)}")
+        # Emergency fallback: copy base file if it exists
+        if os.path.exists(base_pdf_path):
+            try:
+                shutil.copy2(base_pdf_path, output_path)
+                print(f"Fallback: Copied base PDF without merged attachments")
+            except Exception as copy_error:
+                print(f"Failed to copy base PDF: {str(copy_error)}")
+                raise
 
 
 def build_custom_filename(email, idx, naming_config):
@@ -371,7 +782,7 @@ def build_custom_filename(email, idx, naming_config):
     return filename
 
 
-def generate_separate_pdfs(emails, output_dir, base_filename, naming_config=None):
+def generate_separate_pdfs(emails, output_dir, base_filename, naming_config=None, include_attachments=True):
     """Generate separate PDF files for each email and return list of filenames"""
 
     # Default naming config if not provided
@@ -395,7 +806,7 @@ def generate_separate_pdfs(emails, output_dir, base_filename, naming_config=None
         output_path = os.path.join(output_dir, filename)
 
         try:
-            generate_single_email_pdf(email, output_path)
+            generate_single_email_pdf(email, output_path, include_attachments)
             pdf_files.append(filename)
         except Exception as e:
             print(f"Error generating PDF for email {idx + 1}: {str(e)}")

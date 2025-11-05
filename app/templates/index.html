@@ -3,19 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MBOX to PDF Converter</title>
+    <title>Unboxed</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .nav-bar {
+            background: #fff;
+            padding: 1rem 0;
+            border-bottom: 1px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 1rem;
+        }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #007bff;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        .nav-links a:hover {
+            background: #007bff;
+            color: white;
+        }
+        .nav-links a.active {
+            background: #007bff;
+            color: white;
+        }
+        .user-info {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .user-info a {
+            color: #dc3545;
+            text-decoration: none;
+        }
+        .main-content {
+            margin-top: 80px;
+            padding: 2rem 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <header>
+    <div class="nav-bar">
+        <div class="nav-content">
+            <div class="nav-links">
+                <a href="{{ url_for('index') }}" class="active">Convert Files</a>
+                <a href="{{ url_for('files') }}">My Files</a>
+            </div>
+            <div class="user-info">
+                {{ current_user.username }} |
+                <a href="{{ url_for('logout') }}">Logout</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="container">
+            <header>
             <div class="header-content">
                 <div class="header-text">
-                    <h1>MBOX to PDF Converter</h1>
-                    <p class="subtitle">Convert MBOX email archives into PDF documents</p>
+                    <h1>Unboxed</h1>
+                    <p>MBOX to PDF Converter</p>
                 </div>
                 <button class="settings-btn" id="settingsBtn" title="Settings">
-                    <span class="settings-icon">⚙️</span>
+                    <i class="fas fa-cog settings-icon"></i>
                 </button>
             </div>
         </header>
@@ -23,11 +102,10 @@
         <main>
             <div class="upload-section" id="uploadSection">
                 <div class="upload-box" id="uploadBox">
-                    <div class="upload-icon">📁</div>
+                    <div class="upload-icon"><i class="fas fa-folder-open"></i></div>
                     <h2>Drop your MBOX files here</h2>
                     <p>or click to browse</p>
                     <input type="file" id="fileInput" accept=".mbox,.mbx" multiple hidden>
-                    <p class="file-info">Supported formats: .mbox, .mbx (multiple files supported)</p>
                 </div>
                 <div id="selectedFiles" style="display: none; margin-top: 20px;">
                     <h3 style="margin-bottom: 10px;">Selected Files:</h3>
@@ -39,15 +117,15 @@
             <div class="processing-section" id="processingSection" style="display: none;">
                 <div class="spinner"></div>
                 <p class="processing-text" id="processingText">Processing your MBOX files...</p>
-                <p class="processing-subtext">This may take a few moments</p>
+                <p class="processing-subtext">This may take a moment...</p>
             </div>
 
             <div class="result-section" id="resultSection" style="display: none;">
-                <div class="success-icon">✅</div>
+                <div class="success-icon"><i class="fas fa-check-circle"></i></div>
                 <h2>Conversion Complete!</h2>
                 <p class="result-info" id="resultInfo"></p>
                 <button class="download-btn" id="downloadBtn">
-                    <span class="btn-icon">⬇️</span> Download PDF
+                    <i class="fas fa-download"></i> Download
                 </button>
                 <button class="new-conversion-btn" id="newConversionBtn">
                     Convert Another File
@@ -55,7 +133,7 @@
             </div>
 
             <div class="error-section" id="errorSection" style="display: none;">
-                <div class="error-icon">❌</div>
+                <div class="error-icon"><i class="fas fa-exclamation-circle"></i></div>
                 <h2>Conversion Failed</h2>
                 <p class="error-message" id="errorMessage"></p>
                 <button class="retry-btn" id="retryBtn">
@@ -65,7 +143,7 @@
         </main>
 
         <footer>
-            <p>MBOX to PDF Converter</p>
+            <p><a href="https://jwise.dev" target="_blank">https://jwise.dev</a></p>
         </footer>
     </div>
 
@@ -78,59 +156,35 @@
             </div>
             <div class="settings-content">
                 <div class="settings-section">
-                    <h3>Conversion Options</h3>
-                    <div class="setting-item">
-                        <label for="pageSize">Page Size</label>
-                        <select id="pageSize" class="setting-input">
-                            <option value="A4">A4</option>
-                            <option value="Letter">Letter</option>
-                            <option value="Legal">Legal</option>
-                        </select>
-                    </div>
                     <div class="setting-item">
                         <label for="separatePDFs">
                             <input type="checkbox" id="separatePDFs">
                             Generate Separate PDF per Email
                         </label>
-                        <p class="setting-description">Creates individual PDF files for each email and downloads them as a ZIP archive</p>
+                        <p class="setting-description">Creates individual PDF files for each email.</p>
                     </div>
                     <div class="setting-item" id="namingOptions" style="display: none; margin-left: 20px;">
-                        <label style="font-weight: bold;">PDF Filename Format</label>
-                        <p class="setting-description">Customize the order and components of PDF filenames. The 6-digit number is always first.</p>
-                        <div id="namingItemsList" style="margin-top: 10px; border: 1px solid #ddd; border-radius: 4px; padding: 8px; background: #f9f9f9;">
-                            <!-- Naming items will be dynamically populated here -->
-                        </div>
+                        <label>Filename Format</label>
                         <p class="setting-description" id="namingPreview" style="margin-top: 8px; font-size: 0.85em; color: #666; font-family: monospace;">
                             Preview: 000001_Subject_2024-01-15_sender@example.com.pdf
                         </p>
+                        <div id="namingItemsList" style="margin-top: 10px; border: 1px solid #ddd; border-radius: 4px; padding: 8px; background: #f9f9f9;">
+                            <!-- Naming items will be dynamically populated here -->
+                        </div>
                     </div>
                     <div class="setting-item">
                         <label for="includeAttachments">
                             <input type="checkbox" id="includeAttachments" checked>
-                            Include Attachments
+                            Embed Attachments
                         </label>
+                        <p class="setting-description">Automatically embeds supported attachments (images, text files). Unsupported files are listed in the PDFfor reference.</p>
                     </div>
-                </div>
-
-                <div class="settings-section">
-                    <h3>Display Options</h3>
-                    <div class="setting-item">
-                        <label for="darkMode">
-                            <input type="checkbox" id="darkMode">
-                            Dark Mode (Coming Soon)
-                        </label>
-                    </div>
-                </div>
-
-                <div class="settings-section">
-                    <h3>About</h3>
-                    <p class="settings-info">MBOX to PDF Converter v1.0</p>
-                    <p class="settings-info">Convert email archives to PDF format with ease.</p>
                 </div>
             </div>
             <div class="settings-footer">
                 <button class="save-settings-btn" id="saveSettingsBtn">Save Settings</button>
             </div>
+        </div>
         </div>
     </div>
 
