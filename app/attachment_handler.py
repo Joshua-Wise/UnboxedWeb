@@ -43,6 +43,11 @@ def extract_attachments_from_message(message):
 
     for part in message.walk():
         content_disposition = str(part.get('Content-Disposition', ''))
+        content_id = part.get('Content-ID')
+
+        # Skip images with Content-IDs - they're inline images, not attachments
+        if content_id and part.get_content_type().startswith('image/'):
+            continue
 
         if 'attachment' in content_disposition:
             filename = part.get_filename()

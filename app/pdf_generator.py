@@ -7,7 +7,268 @@ from reportlab.lib import colors
 from io import BytesIO
 import os
 import re
+import base64
+from bs4 import BeautifulSoup
 from app.attachment_handler import get_attachment_summary
+
+
+def resolve_cid_images_in_html(html_content, inline_images):
+    """Replace cid: image references with base64 encoded data URLs"""
+    if not html_content or not inline_images:
+        return html_content
+    
+    try:
+        soup = BeautifulSoup(html_content, 'html5lib')
+        
+        # Find all img tags with cid: sources
+        for img_tag in soup.find_all('img'):
+            src = img_tag.get('src', '')
+            
+            # Handle cid: references
+            if src.startswith('cid:'):
+                cid = src[4:]  # Remove 'cid:' prefix
+                
+                # Look up the image in inline_images
+                if cid in inline_images:
+                    attachment = inline_images[cid]
+                    if attachment.processed_content:
+                        # Convert image to base64 data URL
+                        image_data = attachment.processed_content['image_data']
+                        image_format = attachment.processed_content.get('format', 'PNG')
+                        
+                        # Create data URL
+                        b64_data = base64.b64encode(image_data).decode('utf-8')
+                        mime_type = f'image/{image_format.lower()}'
+                        data_url = f'data:{mime_type};base64,{b64_data}'
+                        
+                        img_tag['src'] = data_url
+                        print(f"Resolved CID image: {cid}")
+                else:
+                    print(f"Warning: CID image not found: {cid}")
+        
+        return str(soup)
+    
+    except Exception as e:
+        print(f"Error resolving CID images: {str(e)}")
+        return html_content
+
+
+def convert_html_to_reportlab_format(html_content):
+    """Convert HTML to ReportLab-friendly format, preserving important tags"""
+    if not html_content:
+        return ''
+    
+    try:
+        soup = BeautifulSoup(html_content, 'html5lib')
+        
+        # Remove script and style tags
+        for tag in soup(['script', 'style', 'head']):
+            tag.decompose()
+        
+        # Get body content if exists, otherwise use whole soup
+        body = soup.find('body')
+        if body:
+            content = body
+        else:
+            content = soup
+        
+        # Convert to simplified HTML that ReportLab can handle
+        # ReportLab supports: b, i, u, br, a, font, strong, em
+        result = []
+        
+        for element in content.descendants:
+            if isinstance(element, str):
+                # Clean up text
+                text = str(element)
+                if text.strip():
+                    result.append(text)
+            elif element.name in ['br', 'p', 'div', 'tr']:
+                if element.name != 'br':
+                    result.append('<br/>')
+        
+        # Join and clean up
+        html_text = ''.join(result)
+        
+        # Basic cleanup
+        html_text = re.sub(r'\s+', ' ', html_text)  # Collapse whitespace
+        html_text = re.sub(r'<br/>\s*<br/>\s*<br/>', '<br/><br/>', html_text)  # Limit consecutive breaks
+        
+        return html_text.strip()
+    
+    except Exception as e:
+        print(f"Error converting HTML: {str(e)}")
+        # Fallback to text extraction
+        return BeautifulSoup(html_content, 'html.parser').get_text()
+
+
+def render_html_content(story, html_content, inline_images, styles):
+    """Render HTML content with inline images to PDF story"""
+    try:
+        # Resolve CID image references
+        html_with_images = resolve_cid_images_in_html(html_content, inline_images)
+        
+        # Parse HTML with BeautifulSoup
+        soup = BeautifulSoup(html_with_images, 'html5lib')
+        
+        # Remove script and style tags
+        for tag in soup(['script', 'style', 'head']):
+            tag.decompose()
+        
+        # Get body content
+        body = soup.find('body') or soup
+        
+        # Process content recursively
+        process_html_element(story, body, inline_images, styles)
+        
+    except Exception as e:
+        print(f"Error rendering HTML: {str(e)}")
+        # Fallback to plain text
+        plain_text = BeautifulSoup(html_content, 'html.parser').get_text()
+        paragraphs = plain_text.split('\n')
+        body_style = styles['Normal']
+        for para in paragraphs[:50]:
+            if para.strip():
+                story.append(Paragraph(clean_text(para.strip()), body_style))
+
+
+def process_html_element(story, element, inline_images, styles):
+    """Process HTML element and convert to PDF flowables"""
+    body_style = ParagraphStyle(
+        'HTMLBody',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#000000'),
+        spaceAfter=6,
+        leftIndent=10,
+        alignment=TA_LEFT
+    )
+    
+    # Process child elements
+    current_paragraph = []
+    
+    for child in element.children:
+        if isinstance(child, str):
+            text = str(child).strip()
+            if text:
+                current_paragraph.append(clean_text(text))
+        
+        elif child.name in ['p', 'div', 'br']:
+            # End current paragraph and start new one
+            if current_paragraph:
+                para_text = ' '.join(current_paragraph)
+                if para_text.strip():
+                    try:
+                        story.append(Paragraph(para_text, body_style))
+                    except:
+                        story.append(Paragraph(escape_text(para_text), body_style))
+                current_paragraph = []
+            
+            # Process the element's content
+            if child.name != 'br':
+                process_html_element(story, child, inline_images, styles)
+        
+        elif child.name == 'img':
+            # Handle inline images
+            src = child.get('src', '')
+            
+            # Flush current paragraph
+            if current_paragraph:
+                para_text = ' '.join(current_paragraph)
+                if para_text.strip():
+                    try:
+                        story.append(Paragraph(para_text, body_style))
+                    except:
+                        story.append(Paragraph(escape_text(para_text), body_style))
+                current_paragraph = []
+            
+            # Add image
+            if src.startswith('data:image'):
+                try:
+                    # Extract base64 data
+                    match = re.search(r'data:image/[^;]+;base64,(.+)', src)
+                    if match:
+                        image_data = base64.b64decode(match.group(1))
+                        img = Image(BytesIO(image_data))
+                        
+                        # Scale image to fit page
+                        max_width = 6 * inch
+                        max_height = 4 * inch
+                        
+                        if img.drawWidth > max_width:
+                            aspect = img.drawHeight / img.drawWidth
+                            img.drawWidth = max_width
+                            img.drawHeight = max_width * aspect
+                        
+                        if img.drawHeight > max_height:
+                            aspect = img.drawWidth / img.drawHeight
+                            img.drawHeight = max_height
+                            img.drawWidth = max_height * aspect
+                        
+                        img.hAlign = 'LEFT'
+                        story.append(img)
+                        story.append(Spacer(1, 0.1*inch))
+                except Exception as e:
+                    print(f"Error embedding inline image: {str(e)}")
+        
+        elif child.name in ['b', 'strong']:
+            text = child.get_text().strip()
+            if text:
+                current_paragraph.append(f'<b>{clean_text(text)}</b>')
+        
+        elif child.name in ['i', 'em']:
+            text = child.get_text().strip()
+            if text:
+                current_paragraph.append(f'<i>{clean_text(text)}</i>')
+        
+        elif child.name in ['u']:
+            text = child.get_text().strip()
+            if text:
+                current_paragraph.append(f'<u>{clean_text(text)}</u>')
+        
+        elif child.name == 'a':
+            text = child.get_text().strip()
+            href = child.get('href', '')
+            if text:
+                if href:
+                    current_paragraph.append(f'<a href="{href}">{clean_text(text)}</a>')
+                else:
+                    current_paragraph.append(clean_text(text))
+        
+        elif child.name in ['table', 'ul', 'ol']:
+            # Flush current paragraph before special elements
+            if current_paragraph:
+                para_text = ' '.join(current_paragraph)
+                if para_text.strip():
+                    try:
+                        story.append(Paragraph(para_text, body_style))
+                    except:
+                        story.append(Paragraph(escape_text(para_text), body_style))
+                current_paragraph = []
+            
+            # Simple handling - just extract text
+            text = child.get_text('\n').strip()
+            if text:
+                for line in text.split('\n')[:20]:  # Limit lines
+                    if line.strip():
+                        try:
+                            story.append(Paragraph(clean_text(line.strip()), body_style))
+                        except:
+                            story.append(Paragraph(escape_text(line.strip()), body_style))
+        
+        else:
+            # Other elements - extract text
+            text = child.get_text().strip() if hasattr(child, 'get_text') else str(child).strip()
+            if text:
+                current_paragraph.append(clean_text(text))
+    
+    # Flush remaining paragraph
+    if current_paragraph:
+        para_text = ' '.join(current_paragraph)
+        if para_text.strip():
+            try:
+                story.append(Paragraph(para_text, body_style))
+            except:
+                story.append(Paragraph(escape_text(para_text), body_style))
 
 
 def generate_pdf(emails, output_path, include_attachments=True):
@@ -173,20 +434,42 @@ def _generate_pdf_content(emails, output_path, include_attachments=True):
             story.append(Spacer(1, 0.2*inch))
         
         # Email body
-        body = email.get('body', '(No content)')
-        if body:
-            story.append(Paragraph('<b>Message:</b>', header_style))
-
-            # Split body into paragraphs and add each
-            body_paragraphs = body.split('\n')
-            for para in body_paragraphs:
-                cleaned_para = clean_text(para.strip())
-                if cleaned_para:
-                    try:
-                        story.append(Paragraph(cleaned_para, body_style))
-                    except:
-                        # Fallback for problematic text
-                        story.append(Paragraph(escape_text(cleaned_para), body_style))
+        story.append(Paragraph('<b>Message:</b>', header_style))
+        
+        # Check if HTML body is available
+        has_html = email.get('has_html', False)
+        body_html = email.get('body_html', '')
+        inline_images = email.get('inline_images', {})
+        
+        if has_html and body_html:
+            # Render HTML content with inline images
+            try:
+                render_html_content(story, body_html, inline_images, styles)
+            except Exception as e:
+                print(f"Error rendering HTML, falling back to plain text: {str(e)}")
+                # Fallback to plain text
+                body = email.get('body', '(No content)')
+                if body:
+                    body_paragraphs = body.split('\n')
+                    for para in body_paragraphs:
+                        cleaned_para = clean_text(para.strip())
+                        if cleaned_para:
+                            try:
+                                story.append(Paragraph(cleaned_para, body_style))
+                            except:
+                                story.append(Paragraph(escape_text(cleaned_para), body_style))
+        else:
+            # Use plain text body
+            body = email.get('body', '(No content)')
+            if body:
+                body_paragraphs = body.split('\n')
+                for para in body_paragraphs:
+                    cleaned_para = clean_text(para.strip())
+                    if cleaned_para:
+                        try:
+                            story.append(Paragraph(cleaned_para, body_style))
+                        except:
+                            story.append(Paragraph(escape_text(cleaned_para), body_style))
 
         story.append(Spacer(1, 0.2*inch))
 
@@ -614,20 +897,42 @@ def _generate_single_email_pdf_content(email, output_path, include_attachments=T
         story.append(Spacer(1, 0.2*inch))
 
     # Email body
-    body = email.get('body', '(No content)')
-    if body:
-        story.append(Paragraph('<b>Message:</b>', header_style))
-
-        # Split body into paragraphs and add each
-        body_paragraphs = body.split('\n')
-        for para in body_paragraphs:
-            cleaned_para = clean_text(para.strip())
-            if cleaned_para:
-                try:
-                    story.append(Paragraph(cleaned_para, body_style))
-                except:
-                    # Fallback for problematic text
-                    story.append(Paragraph(escape_text(cleaned_para), body_style))
+    story.append(Paragraph('<b>Message:</b>', header_style))
+    
+    # Check if HTML body is available
+    has_html = email.get('has_html', False)
+    body_html = email.get('body_html', '')
+    inline_images = email.get('inline_images', {})
+    
+    if has_html and body_html:
+        # Render HTML content with inline images
+        try:
+            render_html_content(story, body_html, inline_images, styles)
+        except Exception as e:
+            print(f"Error rendering HTML, falling back to plain text: {str(e)}")
+            # Fallback to plain text
+            body = email.get('body', '(No content)')
+            if body:
+                body_paragraphs = body.split('\n')
+                for para in body_paragraphs:
+                    cleaned_para = clean_text(para.strip())
+                    if cleaned_para:
+                        try:
+                            story.append(Paragraph(cleaned_para, body_style))
+                        except:
+                            story.append(Paragraph(escape_text(cleaned_para), body_style))
+    else:
+        # Use plain text body
+        body = email.get('body', '(No content)')
+        if body:
+            body_paragraphs = body.split('\n')
+            for para in body_paragraphs:
+                cleaned_para = clean_text(para.strip())
+                if cleaned_para:
+                    try:
+                        story.append(Paragraph(cleaned_para, body_style))
+                    except:
+                        story.append(Paragraph(escape_text(cleaned_para), body_style))
 
     story.append(Spacer(1, 0.2*inch))
 

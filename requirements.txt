@@ -4,3 +4,5 @@ reportlab==4.0.7
 Werkzeug==3.0.1
 Pillow==10.1.0
 pypdf==4.0.1
+beautifulsoup4==4.12.2
+html5lib==1.1
