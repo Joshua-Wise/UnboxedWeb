@@ -118,7 +118,7 @@ def render_html_content(story, html_content, inline_images, styles):
         body = soup.find('body') or soup
         
         # Process content recursively
-        process_html_element(story, body, inline_images, styles)
+        process_html_element(story, body, inline_images, styles, quote_level=0)
         
     except Exception as e:
         print(f"Error rendering HTML: {str(e)}")
@@ -131,17 +131,36 @@ def render_html_content(story, html_content, inline_images, styles):
                 story.append(Paragraph(clean_text(para.strip()), body_style))
 
 
-def process_html_element(story, element, inline_images, styles):
+def process_html_element(story, element, inline_images, styles, quote_level=0):
     """Process HTML element and convert to PDF flowables"""
+    # Define styles with quote level indentation
     body_style = ParagraphStyle(
         'HTMLBody',
         parent=styles['Normal'],
         fontSize=10,
         textColor=colors.HexColor('#000000'),
-        spaceAfter=6,
-        leftIndent=10,
-        alignment=TA_LEFT
+        spaceAfter=8,
+        spaceBefore=2,
+        leftIndent=10 + (quote_level * 20),  # Indent quotes
+        rightIndent=10,
+        alignment=TA_LEFT,
+        leading=14  # Increased line spacing
     )
+    
+    # Quoted text style with different color and subtle left border
+    if quote_level > 0:
+        body_style = ParagraphStyle(
+            'QuotedText',
+            parent=body_style,
+            fontSize=9,
+            textColor=colors.HexColor('#666666'),
+            leftIndent=15 + (quote_level * 15),  # Slightly less indentation
+            leftBorderColor=colors.HexColor('#CCCCCC'),
+            leftBorderWidth=2,
+            leftBorderPadding=8,
+            spaceAfter=6,
+            spaceBefore=4
+        )
     
     # Process child elements
     current_paragraph = []
@@ -151,6 +170,26 @@ def process_html_element(story, element, inline_images, styles):
             text = str(child).strip()
             if text:
                 current_paragraph.append(clean_text(text))
+        
+        elif child.name == 'blockquote':
+            # Handle quoted content with increased quote level
+            if current_paragraph:
+                para_text = ' '.join(current_paragraph)
+                if para_text.strip():
+                    try:
+                        story.append(Paragraph(para_text, body_style))
+                    except:
+                        story.append(Paragraph(escape_text(para_text), body_style))
+                current_paragraph = []
+            
+            # Add small space before quote
+            story.append(Spacer(1, 0.05*inch))
+            
+            # Process blockquote content with increased quote level
+            process_html_element(story, child, inline_images, styles, quote_level + 1)
+            
+            # Add small space after quote
+            story.append(Spacer(1, 0.05*inch))
         
         elif child.name in ['p', 'div', 'br']:
             # End current paragraph and start new one
@@ -165,7 +204,26 @@ def process_html_element(story, element, inline_images, styles):
             
             # Process the element's content
             if child.name != 'br':
-                process_html_element(story, child, inline_images, styles)
+                # Check if this div is a Gmail quote or similar
+                is_quote = False
+                if child.name == 'div':
+                    class_attr = child.get('class', [])
+                    if isinstance(class_attr, list):
+                        class_str = ' '.join(class_attr)
+                    else:
+                        class_str = str(class_attr)
+                    
+                    # Check for common quote markers
+                    if 'gmail_quote' in class_str.lower() or 'quoted' in class_str.lower():
+                        is_quote = True
+                
+                # Process with appropriate quote level
+                if is_quote:
+                    story.append(Spacer(1, 0.05*inch))
+                    process_html_element(story, child, inline_images, styles, quote_level + 1)
+                    story.append(Spacer(1, 0.05*inch))
+                else:
+                    process_html_element(story, child, inline_images, styles, quote_level)
         
         elif child.name == 'img':
             # Handle inline images
@@ -348,33 +406,41 @@ def _generate_pdf_content(emails, output_path, include_attachments=True):
     # Define styles
     styles = getSampleStyleSheet()
     
-    # Custom styles
+    # Custom styles with improved typography
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
-        fontSize=16,
-        textColor=colors.HexColor('#1a1a1a'),
-        spaceAfter=20,
-        alignment=TA_LEFT
+        fontSize=18,
+        textColor=colors.HexColor('#2C3E50'),
+        spaceAfter=16,
+        spaceBefore=8,
+        alignment=TA_LEFT,
+        leading=22
     )
     
     header_style = ParagraphStyle(
         'CustomHeader',
         parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.HexColor('#555555'),
-        spaceAfter=6,
-        leftIndent=10
+        fontSize=11,
+        textColor=colors.HexColor('#34495E'),
+        spaceAfter=10,
+        spaceBefore=8,
+        leftIndent=10,
+        fontName='Helvetica-Bold',
+        leading=14
     )
     
     body_style = ParagraphStyle(
         'CustomBody',
         parent=styles['Normal'],
         fontSize=10,
-        textColor=colors.HexColor('#000000'),
-        spaceAfter=12,
+        textColor=colors.HexColor('#2C3E50'),
+        spaceAfter=10,
+        spaceBefore=2,
         leftIndent=10,
-        alignment=TA_LEFT
+        rightIndent=10,
+        alignment=TA_LEFT,
+        leading=14
     )
     
     # Add title page
@@ -392,43 +458,44 @@ def _generate_pdf_content(emails, output_path, include_attachments=True):
         subject = clean_text(email.get('subject', '(No Subject)'))
         story.append(Paragraph(f"<b>Email {email['index']}: {subject}</b>", title_style))
         
-        # Email metadata table
+        # Email metadata table with enhanced styling
         metadata = []
         
         if email.get('from'):
-            metadata.append(['From:', clean_text_for_table(email['from'])])
+            metadata.append(['From:', Paragraph(clean_text_for_table(email['from']), styles['Normal'])])
         
         if email.get('to'):
-            metadata.append(['To:', clean_text_for_table(email['to'])])
+            metadata.append(['To:', Paragraph(clean_text_for_table(email['to']), styles['Normal'])])
         
         if email.get('cc'):
-            metadata.append(['Cc:', clean_text_for_table(email['cc'])])
+            metadata.append(['Cc:', Paragraph(clean_text_for_table(email['cc']), styles['Normal'])])
         
         if email.get('date'):
-            metadata.append(['Date:', clean_text_for_table(email['date'])])
+            metadata.append(['Date:', Paragraph(clean_text_for_table(email['date']), styles['Normal'])])
         
         if email.get('attachments'):
             if include_attachments:
                 # When attachments are embedded, just show count
                 attachment_count = len(email['attachments'])
-                metadata.append(['Attachments:', f'{attachment_count} file(s) - see embedded content below'])
+                metadata.append(['Attachments:', Paragraph(f'{attachment_count} file(s) - see embedded content below', styles['Normal'])])
             else:
                 # When attachments are not embedded, show full list
                 attachments_str = ', '.join(email['attachments'])
-                metadata.append(['Attachments:', clean_text_for_table(attachments_str)])
+                metadata.append(['Attachments:', Paragraph(clean_text_for_table(attachments_str), styles['Normal'])])
         
         if metadata:
             metadata_table = Table(metadata, colWidths=[1*inch, 5.5*inch])
             metadata_table.setStyle(TableStyle([
                 ('FONT', (0, 0), (0, -1), 'Helvetica-Bold', 9),
                 ('FONT', (1, 0), (1, -1), 'Helvetica', 9),
-                ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#555555')),
-                ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#000000')),
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#666666')),
+                ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#2C3E50')),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 10),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
                 ('TOPPADDING', (0, 0), (-1, -1), 4),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('LINEBELOW', (0, -1), (-1, -1), 0.5, colors.HexColor('#E8E8E8')),
             ]))
             story.append(metadata_table)
             story.append(Spacer(1, 0.2*inch))
@@ -822,33 +889,41 @@ def _generate_single_email_pdf_content(email, output_path, include_attachments=T
     # Define styles
     styles = getSampleStyleSheet()
 
-    # Custom styles
+    # Custom styles with improved typography
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
-        fontSize=16,
-        textColor=colors.HexColor('#1a1a1a'),
-        spaceAfter=20,
-        alignment=TA_LEFT
+        fontSize=18,
+        textColor=colors.HexColor('#2C3E50'),
+        spaceAfter=16,
+        spaceBefore=8,
+        alignment=TA_LEFT,
+        leading=22
     )
 
     header_style = ParagraphStyle(
         'CustomHeader',
         parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.HexColor('#555555'),
-        spaceAfter=6,
-        leftIndent=10
+        fontSize=11,
+        textColor=colors.HexColor('#34495E'),
+        spaceAfter=10,
+        spaceBefore=8,
+        leftIndent=10,
+        fontName='Helvetica-Bold',
+        leading=14
     )
 
     body_style = ParagraphStyle(
         'CustomBody',
         parent=styles['Normal'],
         fontSize=10,
-        textColor=colors.HexColor('#000000'),
-        spaceAfter=12,
+        textColor=colors.HexColor('#2C3E50'),
+        spaceAfter=10,
+        spaceBefore=2,
         leftIndent=10,
-        alignment=TA_LEFT
+        rightIndent=10,
+        alignment=TA_LEFT,
+        leading=14
     )
 
     # Email subject
@@ -859,39 +934,40 @@ def _generate_single_email_pdf_content(email, output_path, include_attachments=T
     metadata = []
 
     if email.get('from'):
-        metadata.append(['From:', clean_text_for_table(email['from'])])
+        metadata.append(['From:', Paragraph(clean_text_for_table(email['from']), styles['Normal'])])
 
     if email.get('to'):
-        metadata.append(['To:', clean_text_for_table(email['to'])])
+        metadata.append(['To:', Paragraph(clean_text_for_table(email['to']), styles['Normal'])])
 
     if email.get('cc'):
-        metadata.append(['Cc:', clean_text_for_table(email['cc'])])
+        metadata.append(['Cc:', Paragraph(clean_text_for_table(email['cc']), styles['Normal'])])
 
     if email.get('date'):
-        metadata.append(['Date:', clean_text_for_table(email['date'])])
+        metadata.append(['Date:', Paragraph(clean_text_for_table(email['date']), styles['Normal'])])
 
     if email.get('attachments'):
         if include_attachments:
             # When attachments are embedded, just show count
             attachment_count = len(email['attachments'])
-            metadata.append(['Attachments:', f'{attachment_count} file(s) - see embedded content below'])
+            metadata.append(['Attachments:', Paragraph(f'{attachment_count} file(s) - see embedded content below', styles['Normal'])])
         else:
             # When attachments are not embedded, show full list
             attachments_str = ', '.join(email['attachments'])
-            metadata.append(['Attachments:', clean_text_for_table(attachments_str)])
+            metadata.append(['Attachments:', Paragraph(clean_text_for_table(attachments_str), styles['Normal'])])
 
     if metadata:
         metadata_table = Table(metadata, colWidths=[1*inch, 5.5*inch])
         metadata_table.setStyle(TableStyle([
             ('FONT', (0, 0), (0, -1), 'Helvetica-Bold', 9),
             ('FONT', (1, 0), (1, -1), 'Helvetica', 9),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#555555')),
-            ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#000000')),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#666666')),
+            ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#2C3E50')),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
             ('TOPPADDING', (0, 0), (-1, -1), 4),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LINEBELOW', (0, -1), (-1, -1), 0.5, colors.HexColor('#E8E8E8')),
         ]))
         story.append(metadata_table)
         story.append(Spacer(1, 0.2*inch))
