@@ -6,3 +6,4 @@ Pillow==10.1.0
 pypdf==4.0.1
 beautifulsoup4==4.12.2
 html5lib==1.1
+gunicorn==21.2.0

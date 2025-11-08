@@ -4,6 +4,7 @@ import zipfile
 import shutil
 import threading
 import time
+import gc
 from urllib.parse import unquote
 from flask import Flask, request, render_template, send_file, jsonify, redirect, url_for, flash, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -23,7 +24,7 @@ FILE_CLEANUP_DELAY = 3600  # 1 hour in seconds
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
-app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'  # Change this in production!
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
 
 # Initialize database on startup
 print("Initializing database...")
@@ -206,11 +207,20 @@ def upload_file():
             separate_pdfs=separate_pdfs,
             original_mbox_name=original_mbox_name
         )
+        
+        # Store email count before cleanup
+        email_count = len(emails)
+        
+        # Force garbage collection to free memory after large file processing
+        del emails
+        del all_emails
+        gc.collect()
+        print(f"Memory cleanup completed after processing {email_count} emails")
 
         return jsonify({
             'success': True,
             'filename': output_filename,
-            'email_count': len(emails),
+            'email_count': email_count,
             'separate_pdfs': separate_pdfs
         })
 
@@ -415,6 +425,24 @@ def toggle_admin_endpoint():
 @app.route('/health')
 def health():
     return jsonify({'status': 'healthy'})
+
+
+@app.route('/admin/clear-memory', methods=['POST'])
+@login_required
+@admin_required
+def clear_memory():
+    """Force garbage collection to free memory (admin only)"""
+    try:
+        # Force garbage collection
+        collected = gc.collect()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Garbage collection completed. Collected {collected} objects.',
+            'objects_collected': collected
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 if __name__ == '__main__':

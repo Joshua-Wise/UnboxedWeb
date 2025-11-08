@@ -30,5 +30,7 @@ ENV PYTHONUNBUFFERED=1
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"
 
-# Run the application
-CMD ["python", "-m", "app.main"]
+# Run the application with Gunicorn (production WSGI server)
+# --max-requests: Restart worker after N requests to prevent memory leaks
+# --max-requests-jitter: Add randomness to prevent all workers restarting at once
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--threads", "2", "--timeout", "7200", "--worker-class", "gthread", "--max-requests", "50", "--max-requests-jitter", "10", "app.main:app"]
