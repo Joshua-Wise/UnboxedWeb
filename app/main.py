@@ -13,6 +13,7 @@ from app.mbox_parser import parse_mbox
 from app.pdf_generator import generate_pdf, generate_separate_pdfs
 from app.users import User, authenticate_user, init_db, migrate_json_to_sqlite, admin_required, get_all_users, create_user, delete_user, update_user_password, toggle_admin_status
 from app.file_manager import register_file, get_user_files, get_file_info, delete_file_record, get_stats_for_user, cleanup_orphaned_files
+from app.attachment_handler import create_attachments_zip
 
 app = Flask(__name__)
 
@@ -123,6 +124,7 @@ def upload_file():
         settings = json.loads(settings_json)
         separate_pdfs = settings.get('separatePDFs', False)
         include_attachments = settings.get('includeAttachments', True)
+        separate_attachments_zip = settings.get('separateAttachmentsZip', False)
         naming_config = settings.get('naming', {
             'items': [
                 {'id': 'subject', 'enabled': True},
@@ -169,7 +171,7 @@ def upload_file():
             temp_pdf_dir = os.path.join(app.config['OUTPUT_FOLDER'], f'{base_filename}_pdfs')
             os.makedirs(temp_pdf_dir, exist_ok=True)
 
-            pdf_files = generate_separate_pdfs(emails, temp_pdf_dir, base_filename, naming_config, include_attachments)
+            pdf_files = generate_separate_pdfs(emails, temp_pdf_dir, base_filename, naming_config, include_attachments, separate_attachments_zip)
 
             if not pdf_files:
                 return jsonify({'error': 'Failed to generate PDF files'}), 500
@@ -190,15 +192,42 @@ def upload_file():
             # Generate single PDF with all emails
             output_filename = f"{base_filename}.pdf"
             output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
-            generate_pdf(emails, output_path, include_attachments)
+            generate_pdf(emails, output_path, include_attachments, separate_attachments_zip)
 
         # Clean up uploaded files
         for filepath in saved_filepaths:
             os.remove(filepath)
 
+        # Determine original mbox name for file tracking
+        original_mbox_name = files[0].filename if len(files) == 1 else f'{len(files)} MBOX files'
+
+        # Create separate attachments ZIP if requested
+        attachments_zip_filename = None
+        attachment_count = 0
+        if separate_attachments_zip and include_attachments:
+            attachments_zip_filename = f"{base_filename}_attachments.zip"
+            attachments_zip_path = os.path.join(app.config['OUTPUT_FOLDER'], attachments_zip_filename)
+
+            success, attachment_count, error_msg = create_attachments_zip(emails, attachments_zip_path)
+
+            if success:
+                print(f"Created attachments ZIP: {attachments_zip_filename} with {attachment_count} attachments")
+                # Register the attachments ZIP file
+                register_file(
+                    filename=attachments_zip_filename,
+                    user_id=current_user.id,
+                    file_type='zip',
+                    email_count=len(emails),
+                    separate_pdfs=False,
+                    original_mbox_name=f"{original_mbox_name} - Attachments"
+                )
+            else:
+                # No attachments to save, don't create the file
+                print(f"No attachments ZIP created: {error_msg}")
+                attachments_zip_filename = None
+
         # Register file with user ownership
         file_type = 'zip' if separate_pdfs else 'pdf'
-        original_mbox_name = files[0].filename if len(files) == 1 else f'{len(files)} MBOX files'
         register_file(
             filename=output_filename,
             user_id=current_user.id,
@@ -217,12 +246,19 @@ def upload_file():
         gc.collect()
         print(f"Memory cleanup completed after processing {email_count} emails")
 
-        return jsonify({
+        response_data = {
             'success': True,
             'filename': output_filename,
             'email_count': email_count,
             'separate_pdfs': separate_pdfs
-        })
+        }
+
+        # Include attachments ZIP info if it was created
+        if attachments_zip_filename:
+            response_data['attachments_zip'] = attachments_zip_filename
+            response_data['attachment_count'] = attachment_count
+
+        return jsonify(response_data)
 
     except Exception as e:
         return jsonify({'error': f'Error processing file: {str(e)}'}), 500

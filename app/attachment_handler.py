@@ -2,6 +2,8 @@ import os
 import base64
 import mimetypes
 import tempfile
+import zipfile
+import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from PIL import Image
@@ -327,3 +329,103 @@ def get_attachment_summary(attachments):
         })
 
     return summary
+
+def is_non_text_attachment(attachment):
+    """Determine if an attachment is non-text (image or document)"""
+    return attachment.embed_type in ['image', 'pdf']
+
+def sanitize_filename(filename):
+    """Sanitize filename for safe file system operations"""
+    # Remove or replace unsafe characters
+    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    # Remove leading/trailing spaces and dots
+    filename = filename.strip(' .')
+    # Limit length to 200 characters
+    if len(filename) > 200:
+        name, ext = os.path.splitext(filename)
+        filename = name[:200-len(ext)] + ext
+    return filename
+
+def create_attachments_zip(emails, output_path):
+    """
+    Create a ZIP file containing all non-text attachments from emails
+
+    Args:
+        emails: List of email dictionaries containing attachments
+        output_path: Path where the ZIP file should be created
+
+    Returns:
+        tuple: (success: bool, attachment_count: int, error_message: str or None)
+    """
+    try:
+        attachment_count = 0
+
+        with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for email_idx, email in enumerate(emails, start=1):
+                attachments = email.get('attachments', [])
+
+                if not attachments:
+                    continue
+
+                # Create a folder name for this email
+                email_subject = email.get('subject', 'No Subject')
+                # Sanitize subject for use in folder name
+                safe_subject = sanitize_filename(email_subject)
+                # Truncate subject to reasonable length for folder name
+                if len(safe_subject) > 50:
+                    safe_subject = safe_subject[:50]
+
+                folder_name = f"email_{email_idx:05d}_{safe_subject}"
+
+                # Track attachment filenames in this email to handle duplicates
+                used_filenames = {}
+
+                for attachment in attachments:
+                    # Only include non-text attachments (images and PDFs)
+                    if not is_non_text_attachment(attachment):
+                        continue
+
+                    # Skip attachments with errors
+                    if attachment.error_message:
+                        continue
+
+                    # Get the original filename
+                    filename = attachment.filename
+                    safe_filename = sanitize_filename(filename)
+
+                    # Handle duplicate filenames within the same email
+                    if safe_filename in used_filenames:
+                        used_filenames[safe_filename] += 1
+                        name, ext = os.path.splitext(safe_filename)
+                        safe_filename = f"{name}_{used_filenames[safe_filename]}{ext}"
+                    else:
+                        used_filenames[safe_filename] = 0
+
+                    # Create the path in the ZIP file
+                    zip_path = f"{folder_name}/{safe_filename}"
+
+                    # Write the attachment to the ZIP
+                    zipf.writestr(zip_path, attachment.content_data)
+                    attachment_count += 1
+
+                    print(f"Added attachment to ZIP: {zip_path} ({format_file_size(attachment.size)})")
+
+        if attachment_count == 0:
+            # No attachments were added, remove the empty ZIP file
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            return False, 0, "No non-text attachments found to save"
+
+        print(f"Created attachments ZIP with {attachment_count} attachments at {output_path}")
+        return True, attachment_count, None
+
+    except Exception as e:
+        error_msg = f"Error creating attachments ZIP: {str(e)}"
+        print(error_msg)
+        # Clean up partial ZIP file if it exists
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except:
+                pass
+        return False, 0, error_msg
