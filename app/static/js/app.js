@@ -200,10 +200,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showError(data.error);
             } else {
                 currentFilename = data.filename;
-                const fileCountMsg = files.length > 1 ? ` from ${files.length} files` : '';
-                const separateMsg = data.separate_pdfs ? ' (as separate PDFs)' : '';
-                const attachmentsMsg = data.attachments_zip ? `\n\nNon-text attachments saved to: ${data.attachments_zip} (${data.attachment_count} files)` : '';
-                showResult(data.email_count, fileCountMsg + separateMsg + attachmentsMsg);
+                showResult(data.email_count, '');
             }
         })
         .catch(error => {

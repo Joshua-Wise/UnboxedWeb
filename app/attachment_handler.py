@@ -331,8 +331,8 @@ def get_attachment_summary(attachments):
     return summary
 
 def is_non_text_attachment(attachment):
-    """Determine if an attachment is non-text (image or document)"""
-    return attachment.embed_type in ['image', 'pdf']
+    """Determine if an attachment is non-text (image, document, or any binary file)"""
+    return attachment.embed_type != 'text'
 
 def sanitize_filename(filename):
     """Sanitize filename for safe file system operations"""
@@ -362,7 +362,7 @@ def create_attachments_zip(emails, output_path):
 
         with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for email_idx, email in enumerate(emails, start=1):
-                attachments = email.get('attachments', [])
+                attachments = email.get('attachment_objects', [])
 
                 if not attachments:
                     continue

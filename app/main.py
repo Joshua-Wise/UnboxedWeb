@@ -166,6 +166,23 @@ def upload_file():
         else:
             base_filename = f'combined_{len(files)}_mbox_files'
 
+        # Create separate attachments ZIP if requested
+        attachments_zip_path = None
+        attachment_count = 0
+        if separate_attachments_zip:
+            temp_attachments_zip = f"{base_filename}_attachments_temp.zip"
+            attachments_zip_path = os.path.join(app.config['OUTPUT_FOLDER'], temp_attachments_zip)
+
+            success, attachment_count, error_msg = create_attachments_zip(emails, attachments_zip_path)
+
+            if success:
+                print(f"Created attachments ZIP with {attachment_count} attachments")
+            else:
+                # No attachments to save
+                print(f"No attachments ZIP created: {error_msg}")
+                attachments_zip_path = None
+                attachment_count = 0
+
         if separate_pdfs:
             # Generate separate PDFs for each email
             temp_pdf_dir = os.path.join(app.config['OUTPUT_FOLDER'], f'{base_filename}_pdfs')
@@ -176,7 +193,7 @@ def upload_file():
             if not pdf_files:
                 return jsonify({'error': 'Failed to generate PDF files'}), 500
 
-            # Create ZIP file
+            # Create ZIP file with PDFs
             output_filename = f"{base_filename}.zip"
             output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
 
@@ -184,15 +201,45 @@ def upload_file():
                 for pdf_file in pdf_files:
                     pdf_path = os.path.join(temp_pdf_dir, pdf_file)
                     zipf.write(pdf_path, pdf_file)
+                
+                # Add attachments ZIP to the main ZIP if it exists
+                if attachments_zip_path and os.path.exists(attachments_zip_path):
+                    zipf.write(attachments_zip_path, 'attachments.zip')
+                    print(f"Added attachments.zip to main ZIP")
 
             # Clean up temporary PDF directory
             shutil.rmtree(temp_pdf_dir)
 
         else:
             # Generate single PDF with all emails
-            output_filename = f"{base_filename}.pdf"
-            output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
-            generate_pdf(emails, output_path, include_attachments, separate_attachments_zip)
+            # If attachments ZIP exists, we need to create a ZIP containing both
+            if attachments_zip_path and os.path.exists(attachments_zip_path):
+                # Create a ZIP containing the PDF and attachments ZIP
+                pdf_filename = f"{base_filename}.pdf"
+                temp_pdf_path = os.path.join(app.config['OUTPUT_FOLDER'], pdf_filename)
+                generate_pdf(emails, temp_pdf_path, include_attachments, separate_attachments_zip)
+                
+                # Create the final ZIP
+                output_filename = f"{base_filename}.zip"
+                output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+                
+                with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    zipf.write(temp_pdf_path, pdf_filename)
+                    zipf.write(attachments_zip_path, 'attachments.zip')
+                    print(f"Created ZIP with PDF and attachments")
+                
+                # Clean up temporary PDF
+                os.remove(temp_pdf_path)
+            else:
+                # No attachments ZIP, just create the PDF
+                output_filename = f"{base_filename}.pdf"
+                output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+                generate_pdf(emails, output_path, include_attachments, separate_attachments_zip)
+
+        # Clean up temporary attachments ZIP if it exists
+        if attachments_zip_path and os.path.exists(attachments_zip_path):
+            os.remove(attachments_zip_path)
+            print(f"Cleaned up temporary attachments ZIP")
 
         # Clean up uploaded files
         for filepath in saved_filepaths:
@@ -201,33 +248,8 @@ def upload_file():
         # Determine original mbox name for file tracking
         original_mbox_name = files[0].filename if len(files) == 1 else f'{len(files)} MBOX files'
 
-        # Create separate attachments ZIP if requested
-        attachments_zip_filename = None
-        attachment_count = 0
-        if separate_attachments_zip and include_attachments:
-            attachments_zip_filename = f"{base_filename}_attachments.zip"
-            attachments_zip_path = os.path.join(app.config['OUTPUT_FOLDER'], attachments_zip_filename)
-
-            success, attachment_count, error_msg = create_attachments_zip(emails, attachments_zip_path)
-
-            if success:
-                print(f"Created attachments ZIP: {attachments_zip_filename} with {attachment_count} attachments")
-                # Register the attachments ZIP file
-                register_file(
-                    filename=attachments_zip_filename,
-                    user_id=current_user.id,
-                    file_type='zip',
-                    email_count=len(emails),
-                    separate_pdfs=False,
-                    original_mbox_name=f"{original_mbox_name} - Attachments"
-                )
-            else:
-                # No attachments to save, don't create the file
-                print(f"No attachments ZIP created: {error_msg}")
-                attachments_zip_filename = None
-
         # Register file with user ownership
-        file_type = 'zip' if separate_pdfs else 'pdf'
+        file_type = 'zip' if (separate_pdfs or (separate_attachments_zip and attachment_count > 0)) else 'pdf'
         register_file(
             filename=output_filename,
             user_id=current_user.id,
@@ -253,10 +275,10 @@ def upload_file():
             'separate_pdfs': separate_pdfs
         }
 
-        # Include attachments ZIP info if it was created
-        if attachments_zip_filename:
-            response_data['attachments_zip'] = attachments_zip_filename
+        # Include attachment count if attachments were saved
+        if attachment_count > 0:
             response_data['attachment_count'] = attachment_count
+            response_data['attachments_bundled'] = True
 
         return jsonify(response_data)
 

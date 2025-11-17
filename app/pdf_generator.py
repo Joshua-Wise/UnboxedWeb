@@ -683,7 +683,7 @@ def embed_attachments_in_story(story, email, styles, separate_attachments_zip=Fa
             continue
 
         # Skip non-text attachments if they will be saved to a separate ZIP
-        if separate_attachments_zip and attachment.embed_type in ['image', 'pdf']:
+        if separate_attachments_zip and attachment.embed_type != 'text':
             continue
 
         try:
