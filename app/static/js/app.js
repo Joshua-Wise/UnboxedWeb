@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveSettingsBtn = document.getElementById('saveSettingsBtn');
     const separatePDFsCheckbox = document.getElementById('separatePDFs');
     const includeAttachmentsCheckbox = document.getElementById('includeAttachments');
+    const separateAttachmentsZipCheckbox = document.getElementById('separateAttachmentsZip');
 
     // Naming options elements
     const namingOptions = document.getElementById('namingOptions');
@@ -199,9 +200,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showError(data.error);
             } else {
                 currentFilename = data.filename;
-                const fileCountMsg = files.length > 1 ? ` from ${files.length} files` : '';
-                const separateMsg = data.separate_pdfs ? ' (as separate PDFs)' : '';
-                showResult(data.email_count, fileCountMsg + separateMsg);
+                showResult(data.email_count, '');
             }
         })
         .catch(error => {
@@ -376,6 +375,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (settings.includeAttachments !== undefined) {
             includeAttachmentsCheckbox.checked = settings.includeAttachments;
         }
+        if (settings.separateAttachmentsZip !== undefined) {
+            separateAttachmentsZipCheckbox.checked = settings.separateAttachmentsZip;
+        }
         // Initialize naming items
         if (settings.namingItems && Array.isArray(settings.namingItems)) {
             namingItems = settings.namingItems;
@@ -389,6 +391,7 @@ document.addEventListener('DOMContentLoaded', function() {
             pageSize: 'Letter',
             separatePDFs: false,
             includeAttachments: true,
+            separateAttachmentsZip: false,
             namingItems: [
                 { id: 'subject', label: 'Subject', enabled: true },
                 { id: 'date', label: 'Date', enabled: false },
@@ -402,6 +405,7 @@ document.addEventListener('DOMContentLoaded', function() {
             pageSize: 'Letter',  // Default to Letter
             separatePDFs: separatePDFsCheckbox.checked,
             includeAttachments: includeAttachmentsCheckbox.checked,
+            separateAttachmentsZip: separateAttachmentsZipCheckbox.checked,
             namingItems: namingItems
         };
 

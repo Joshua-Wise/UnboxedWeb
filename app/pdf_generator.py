@@ -329,7 +329,7 @@ def process_html_element(story, element, inline_images, styles, quote_level=0):
                 story.append(Paragraph(escape_text(para_text), body_style))
 
 
-def generate_pdf(emails, output_path, include_attachments=True):
+def generate_pdf(emails, output_path, include_attachments=True, separate_attachments_zip=False):
     """Generate a PDF from a list of email dictionaries"""
     import tempfile
     
@@ -354,7 +354,7 @@ def generate_pdf(emails, output_path, include_attachments=True):
         try:
             # Generate base PDF to temp file
             print(f"Generating base PDF to temp file: {temp_path}")
-            _generate_pdf_content(emails, temp_path, include_attachments)
+            _generate_pdf_content(emails, temp_path, include_attachments, separate_attachments_zip)
             
             if not os.path.exists(temp_path):
                 print(f"ERROR: Base PDF was not created at {temp_path}")
@@ -384,10 +384,10 @@ def generate_pdf(emails, output_path, include_attachments=True):
     else:
         # No PDF attachments, generate directly to output
         print(f"No PDF attachments detected. Generating directly to output.")
-        _generate_pdf_content(emails, output_path, include_attachments)
+        _generate_pdf_content(emails, output_path, include_attachments, separate_attachments_zip)
 
 
-def _generate_pdf_content(emails, output_path, include_attachments=True):
+def _generate_pdf_content(emails, output_path, include_attachments=True, separate_attachments_zip=False):
     """Internal function to generate PDF content"""
     
     # Create PDF document
@@ -542,7 +542,7 @@ def _generate_pdf_content(emails, output_path, include_attachments=True):
 
         # Embed attachments if present and enabled
         if include_attachments:
-            embed_attachments_in_story(story, email, styles)
+            embed_attachments_in_story(story, email, styles, separate_attachments_zip)
 
         story.append(Spacer(1, 0.2*inch))
     
@@ -614,7 +614,7 @@ def escape_text(text):
     return ''.join(result)
 
 
-def embed_attachments_in_story(story, email, styles):
+def embed_attachments_in_story(story, email, styles, separate_attachments_zip=False):
     """Embed supported attachments into the PDF story"""
     attachment_objects = email.get('attachment_objects', [])
 
@@ -680,6 +680,10 @@ def embed_attachments_in_story(story, email, styles):
     embedded_count = 0
     for attachment in attachment_objects:
         if not attachment.is_supported or attachment.error_message:
+            continue
+
+        # Skip non-text attachments if they will be saved to a separate ZIP
+        if separate_attachments_zip and attachment.embed_type != 'text':
             continue
 
         try:
@@ -817,10 +821,10 @@ def sanitize_filename(text, max_length=50):
     return text
 
 
-def generate_single_email_pdf(email, output_path, include_attachments=True):
+def generate_single_email_pdf(email, output_path, include_attachments=True, separate_attachments_zip=False):
     """Generate a PDF for a single email"""
     import tempfile
-    
+
     # Check if we have PDF attachments that need merging
     has_pdf_attachments = False
     if include_attachments and email.get('attachment_objects'):
@@ -828,17 +832,17 @@ def generate_single_email_pdf(email, output_path, include_attachments=True):
             if attachment.embed_type == 'pdf' and attachment.processed_content:
                 has_pdf_attachments = True
                 break
-    
+
     # If we have PDF attachments, generate to temp file first, then merge
     if has_pdf_attachments:
         print(f"PDF attachment detected in single email. Using two-step generation.")
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
             temp_path = tmp_file.name
-        
+
         try:
             # Generate base PDF to temp file
             print(f"Generating base PDF to temp file: {temp_path}")
-            _generate_single_email_pdf_content(email, temp_path, include_attachments)
+            _generate_single_email_pdf_content(email, temp_path, include_attachments, separate_attachments_zip)
             
             if not os.path.exists(temp_path):
                 print(f"ERROR: Base PDF was not created at {temp_path}")
@@ -867,10 +871,10 @@ def generate_single_email_pdf(email, output_path, include_attachments=True):
                 print(f"Cleaned up temp file")
     else:
         # No PDF attachments, generate directly to output
-        _generate_single_email_pdf_content(email, output_path, include_attachments)
+        _generate_single_email_pdf_content(email, output_path, include_attachments, separate_attachments_zip)
 
 
-def _generate_single_email_pdf_content(email, output_path, include_attachments=True):
+def _generate_single_email_pdf_content(email, output_path, include_attachments=True, separate_attachments_zip=False):
     """Internal function to generate single email PDF content"""
 
     # Create PDF document
@@ -1163,7 +1167,7 @@ def build_custom_filename(email, idx, naming_config):
     return filename
 
 
-def generate_separate_pdfs(emails, output_dir, base_filename, naming_config=None, include_attachments=True):
+def generate_separate_pdfs(emails, output_dir, base_filename, naming_config=None, include_attachments=True, separate_attachments_zip=False):
     """Generate separate PDF files for each email and return list of filenames"""
 
     # Default naming config if not provided
@@ -1187,7 +1191,7 @@ def generate_separate_pdfs(emails, output_dir, base_filename, naming_config=None
         output_path = os.path.join(output_dir, filename)
 
         try:
-            generate_single_email_pdf(email, output_path, include_attachments)
+            generate_single_email_pdf(email, output_path, include_attachments, separate_attachments_zip)
             pdf_files.append(filename)
         except Exception as e:
             print(f"Error generating PDF for email {idx + 1}: {str(e)}")
