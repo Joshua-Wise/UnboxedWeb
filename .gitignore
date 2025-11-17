@@ -40,5 +40,6 @@ Thumbs.db
 /tmp/
 *.log
 CLAUDE.md
-/outputs
-/uploads
+/outputs/
+/uploads/
+/data/
