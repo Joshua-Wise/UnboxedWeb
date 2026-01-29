@@ -8,9 +8,9 @@ services:
       - "8080:5000"
     volumes:
       # Optional: persist uploads and outputs if needed
-      - /Users/joshuawise/Documents/GitHub/pdfbox/uploads:/tmp/uploads
-      - /Users/joshuawise/Documents/GitHub/pdfbox/outputs:/tmp/outputs
-      - /Users/joshuawise/Documents/GitHub/pdfbox/data:/app/data
+      - ./uploads:/tmp/uploads
+      - ./outputs:/tmp/outputs
+      - ./data:/app/data
     environment:
       - FLASK_APP=app.main
       - PYTHONUNBUFFERED=1
@@ -22,7 +22,7 @@ services:
           memory: 16G
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')" ]
       interval: 30s
       timeout: 3s
       retries: 3
