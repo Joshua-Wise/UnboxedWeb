@@ -133,6 +133,9 @@ def render_html_content(story, html_content, inline_images, styles):
 
 def process_html_element(story, element, inline_images, styles, quote_level=0):
     """Process HTML element and convert to PDF flowables"""
+    # Cap quote level to prevent deeply nested threads from pushing content off the page
+    capped_level = min(quote_level, 4)
+
     # Define styles with quote level indentation
     body_style = ParagraphStyle(
         'HTMLBody',
@@ -141,12 +144,12 @@ def process_html_element(story, element, inline_images, styles, quote_level=0):
         textColor=colors.HexColor('#000000'),
         spaceAfter=8,
         spaceBefore=2,
-        leftIndent=10 + (quote_level * 20),  # Indent quotes
+        leftIndent=10 + (capped_level * 20),  # Indent quotes
         rightIndent=10,
         alignment=TA_LEFT,
         leading=14  # Increased line spacing
     )
-    
+
     # Quoted text style with different color and subtle left border
     if quote_level > 0:
         body_style = ParagraphStyle(
@@ -154,7 +157,7 @@ def process_html_element(story, element, inline_images, styles, quote_level=0):
             parent=body_style,
             fontSize=9,
             textColor=colors.HexColor('#666666'),
-            leftIndent=15 + (quote_level * 15),  # Slightly less indentation
+            leftIndent=15 + (capped_level * 15),  # Slightly less indentation
             leftBorderColor=colors.HexColor('#CCCCCC'),
             leftBorderWidth=2,
             leftBorderPadding=8,
