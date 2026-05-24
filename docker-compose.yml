@@ -10,7 +10,7 @@ services:
       # Optional: persist uploads and outputs if needed
       - ./uploads:/tmp/uploads
       - ./outputs:/tmp/outputs
-      - ./data:/app/data
+      - db_data:/app/data
     environment:
       - FLASK_APP=app.main
       - PYTHONUNBUFFERED=1
@@ -27,3 +27,6 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
+
+volumes:
+  db_data:
